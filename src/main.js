@@ -615,47 +615,16 @@ const renderClientes = async (container, action, params) => {
     window.cPay = async (id, name) => {
       const clis = await fetchData('clientes');
       const c = clis.find(x => x.id == id);
+      const m = prompt(`¿Cuánto abona ${name}? (Deuda: $${c.saldo_deuda})`);
+      const val = parseFloat(m);
+      if (!val || val <= 0) return;
 
-      modalOverlay.classList.add('active');
-      const content = document.getElementById('modal-content');
-      content.innerHTML = `
-        <h2>Registrar Abono</h2>
-        <p style="margin-bottom: 1.5rem; color: var(--text-muted);">
-          Registrando pago para: <strong>${name}</strong><br>
-          Deuda actual: <span style="color: var(--danger); font-weight: 700;">$${Number(c.saldo_deuda).toFixed(2)}</span>
-        </p>
-        
-        <div class="form-group">
-          <label>Monto a abonar ($)</label>
-          <input type="number" id="payAmount" step="0.01" value="${c.saldo_deuda}" autofocus>
-        </div>
-        
-        <div style="display:grid; gap: 10px; margin-top: 2rem;">
-          <button class="btn btn-primary" id="btnConfirmPay">REGISTRAR PAGO</button>
-          <button class="btn btn-ghost" onclick="closeModal()">CANCELAR</button>
-        </div>
-      `;
-
-      document.getElementById('btnConfirmPay').onclick = async () => {
-        const val = parseFloat(document.getElementById('payAmount').value);
-        if (!val || val <= 0) return toast("Monto inválido", "error");
-
-        const btn = document.getElementById('btnConfirmPay');
-        btn.disabled = true;
-        btn.innerHTML = '<div class="loading-spinner"></div>';
-
-        try {
-          await updateData('clientes', id, { saldo_deuda: Number(c.saldo_deuda) - val });
-          await addData('pagos', { cliente_id: id, monto: val, fecha: new Date().toISOString() });
-          toast("Pago registrado con éxito");
-          closeModal();
-          navigate('clientes');
-        } catch (e) {
-          toast("Error: " + e.message, "error");
-          btn.disabled = false;
-          btn.innerText = 'REGISTRAR PAGO';
-        }
-      };
+      try {
+        await updateData('clientes', id, { saldo_deuda: Number(c.saldo_deuda) - val });
+        await addData('pagos', { cliente_id: id, monto: val, fecha: new Date().toISOString() });
+        toast("Pago registrado");
+        navigate('clientes');
+      } catch (e) { toast("Error: " + e.message, "error"); }
     };
 
   } else {
