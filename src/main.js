@@ -593,38 +593,73 @@ const renderClientes = async (container, action, params) => {
         <button class="btn btn-primary" onclick="navigate('clientes', 'create')">＋ NUEVO CLIENTE</button>
       </div>
 
-      ${clientes.map(c => `
-        <div class="card animate-fade-in" style="display:flex; justify-content:space-between; align-items:center;">
-          <div>
-            <div style="font-weight:800; font-size:1.1rem;">${c.nombre}</div>
-            <div style="font-size:0.8rem; color:var(--text-muted);">ID: #${c.id.toString().slice(-4)}</div>
+      ${clientes.map(c => {
+        const saldo = Number(c.saldo_deuda);
+        const isDebt = saldo > 0;
+        return `
+          <div class="card animate-fade-in" style="display:flex; justify-content:space-between; align-items:center;">
+            <div>
+              <div style="font-weight:800; font-size:1.1rem;">${c.nombre}</div>
+              <div style="font-size:0.8rem; color:var(--text-muted);">ID: #${c.id.toString().slice(-4)}</div>
+            </div>
+            <div style="text-align:right;">
+               <div style="color: ${isDebt ? 'var(--danger)' : 'var(--primary)'}; font-weight:900; font-size:1.2rem;">
+                 ${isDebt ? 'Debe: ' : 'Favor: '}$${Math.abs(saldo).toFixed(2)}
+               </div>
+               <div style="display:flex; gap:5px; margin-top:5px; justify-content: flex-end;">
+                  <button class="btn btn-secondary" style="padding:5px 10px; font-size:0.7rem;" onclick="window.cPay(${c.id}, '${c.nombre}')">ABONAR</button>
+                  <button class="btn btn-ghost" style="padding:5px;" onclick="navigate('clientes', 'edit', { id: ${c.id}, name: '${c.nombre}' })">✏️</button>
+               </div>
+            </div>
           </div>
-          <div style="text-align:right;">
-             <div style="color: ${Number(c.saldo_deuda) > 0 ? 'var(--danger)' : 'var(--primary)'}; font-weight:900; font-size:1.2rem;">
-               $${Number(c.saldo_deuda).toFixed(2)}
-             </div>
-             <div style="display:flex; gap:5px; margin-top:5px;">
-                <button class="btn btn-secondary" style="padding:5px 10px; font-size:0.7rem;" onclick="window.cPay(${c.id}, '${c.nombre}')">ABONAR</button>
-                <button class="btn btn-ghost" style="padding:5px;" onclick="navigate('clientes', 'edit', { id: ${c.id}, name: '${c.nombre}' })">✏️</button>
-             </div>
-          </div>
-        </div>
-      `).join('')}
+        `;
+      }).join('')}
     `;
 
     window.cPay = async (id, name) => {
       const clis = await fetchData('clientes');
       const c = clis.find(x => x.id == id);
-      const m = prompt(`¿Cuánto abona ${name}? (Deuda: $${c.saldo_deuda})`);
-      const val = parseFloat(m);
-      if (!val || val <= 0) return;
-
-      try {
-        await updateData('clientes', id, { saldo_deuda: Number(c.saldo_deuda) - val });
-        await addData('pagos', { cliente_id: id, monto: val, fecha: new Date().toISOString() });
-        toast("Pago registrado");
-        navigate('clientes');
-      } catch (e) { toast("Error: " + e.message, "error"); }
+      
+      modalOverlay.classList.add('active');
+      const content = document.getElementById('modal-content');
+      content.innerHTML = `
+        <h2>Registrar Abono</h2>
+        <p style="margin-bottom: 1.5rem; color: var(--text-muted);">
+          Registrando pago para: <strong>${name}</strong><br>
+          Deuda actual: <span style="color: var(--danger); font-weight: 700;">$${Number(c.saldo_deuda).toFixed(2)}</span>
+        </p>
+        
+        <div class="form-group">
+          <label>Monto a abonar ($)</label>
+          <input type="number" id="payAmount" step="0.01" value="${c.saldo_deuda}" autofocus>
+        </div>
+        
+        <div style="display:grid; gap: 10px; margin-top: 2rem;">
+          <button class="btn btn-primary" id="btnConfirmPay">REGISTRAR PAGO</button>
+          <button class="btn btn-ghost" onclick="closeModal()">CANCELAR</button>
+        </div>
+      `;
+      
+      document.getElementById('btnConfirmPay').onclick = async () => {
+        const val = parseFloat(document.getElementById('payAmount').value);
+        if (!val || val <= 0) return toast("Monto inválido", "error");
+        
+        const btn = document.getElementById('btnConfirmPay');
+        btn.disabled = true;
+        btn.innerHTML = '<div class="loading-spinner"></div>';
+        
+        try {
+          await updateData('clientes', id, { saldo_deuda: Number(c.saldo_deuda) - val });
+          await addData('pagos', { cliente_id: id, monto: val, fecha: new Date().toISOString() });
+          toast("Pago registrado con éxito");
+          closeModal();
+          navigate('clientes');
+        } catch (e) { 
+          toast("Error: " + e.message, "error"); 
+          btn.disabled = false;
+          btn.innerText = 'REGISTRAR PAGO';
+        }
+      };
     };
 
   } else {
@@ -702,42 +737,148 @@ const renderCompras = async (container, action, params) => {
     container.innerHTML = `
       <div class="card">
         <form id="buyForm">
-          <div class="form-group">
-            <label>Producto a reponer</label>
-            <select id="bProd" required>
-              <option value="">-- Selecciona producto --</option>
-               ${productos.map(p => `<option value="${p.id}">${p.nombre} (Libre: ${p.stock})</option>`).join('')}
-            </select>
+          <div class="form-group" id="isNewProductContainer" style="display:flex; align-items:center; gap:10px; margin-bottom: 1.5rem; padding: 10px; background: var(--primary-light); border-radius: var(--radius-sm);">
+            <input type="checkbox" id="isNewProduct" style="width: 20px; height: 20px; margin-top: 0;">
+            <label for="isNewProduct" style="margin-bottom: 0; color: var(--primary-dark); font-weight: 700;">✨ ¿ES UN PRODUCTO NUEVO?</label>
           </div>
+
+          <div id="existingProductFields">
+            <div class="form-group">
+              <label>🔍 Buscar y Seleccionar Producto</label>
+              <input type="text" id="bSearch" placeholder="Escribe para buscar..." style="margin-bottom: 10px;">
+              <select id="bProd">
+                <option value="">-- Selecciona producto --</option>
+                 ${productos.map(p => `<option value="${p.id}">${p.nombre} (Stock: ${p.stock})</option>`).join('')}
+              </select>
+            </div>
+          </div>
+
+          <div id="newProductFields" style="display:none;" class="animate-fade-in">
+            <div class="form-group">
+              <label>Nombre del Nuevo Producto</label>
+              <input type="text" id="pName" placeholder="Ej: Mango Tommy">
+            </div>
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+              <div class="form-group">
+                <label>Unidad</label>
+                <select id="pUnit">
+                  <option value="kg">Kilo (kg)</option>
+                  <option value="unid">Unidad (unid)</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Precio Venta Sugerido</label>
+                <input type="number" id="pPrice" step="0.01" placeholder="0.00">
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Stock Mínimo (Alerta)</label>
+              <input type="number" id="pMin" value="5">
+            </div>
+          </div>
+
           <div class="form-group">
-            <label>Cantidad comprada</label>
+            <label id="qtyLabel">Cantidad comprada</label>
             <input type="number" id="bQty" step="0.01" required placeholder="0.00">
           </div>
           <div class="form-group">
-            <label>Precio de Compra x unidad/kg</label>
+            <label id="costLabel">Precio de Compra x unidad/kg</label>
             <input type="number" id="bCost" step="0.01" required placeholder="0.00">
           </div>
+
           <div style="display:grid; gap:10px; margin-top:2rem;">
-            <button type="submit" class="btn btn-primary" id="btnDoBuy">📦 REGISTRAR Y ACTUALIZAR STOCK</button>
+            <button type="submit" class="btn btn-primary" id="btnDoBuy">📦 REGISTRAR COMPRA</button>
             <button type="button" class="btn btn-secondary" onclick="navigate('compras')">CANCELAR</button>
           </div>
         </form>
       </div>
     `;
 
+    const isNewCheck = document.getElementById('isNewProduct');
+    const existingFields = document.getElementById('existingProductFields');
+    const newFields = document.getElementById('newProductFields');
+    const bSearch = document.getElementById('bSearch');
+    const bProd = document.getElementById('bProd');
+
+    isNewCheck.onchange = (e) => {
+      const isNew = e.target.checked;
+      existingFields.style.display = isNew ? 'none' : 'block';
+      newFields.style.display = isNew ? 'block' : 'none';
+      if (!isNew) {
+         document.getElementById('pName').required = false;
+         document.getElementById('pPrice').required = false;
+         document.getElementById('bProd').required = true;
+      } else {
+         document.getElementById('pName').required = true;
+         document.getElementById('pPrice').required = true;
+         document.getElementById('bProd').required = false;
+      }
+    };
+
+    bSearch.oninput = (e) => {
+      const term = e.target.value.toLowerCase();
+      const options = bProd.options;
+      for (let i = 1; i < options.length; i++) {
+        const txt = options[i].text.toLowerCase();
+        options[i].style.display = txt.includes(term) ? 'block' : 'none';
+      }
+    };
+
     document.getElementById('buyForm').onsubmit = async (e) => {
       e.preventDefault();
-      const pid = parseInt(document.getElementById('bProd').value);
+      const btn = document.getElementById('btnDoBuy');
+      btn.disabled = true;
+      btn.innerHTML = '<div class="loading-spinner"></div>';
+
+      const isNew = isNewCheck.checked;
       const qty = parseFloat(document.getElementById('bQty').value);
       const cost = parseFloat(document.getElementById('bCost').value);
 
       try {
-        await addData('compras', { producto_id: pid, cantidad: qty, costo_unidad: cost, total: qty * cost, fecha: new Date().toISOString() });
-        const p = productos.find(x => x.id == pid);
-        await updateData('productos', pid, { stock: Number(p.stock) + qty, precio_compra: cost });
-        toast("Stock actualizado con éxito");
+        let pid;
+        if (isNew) {
+          const name = document.getElementById('pName').value;
+          const unit = document.getElementById('pUnit').value;
+          const price = parseFloat(document.getElementById('pPrice').value);
+          const min = parseInt(document.getElementById('pMin').value) || 5;
+          
+          // 1. Create product
+          const product = await addData('productos', {
+            nombre: name,
+            unidad: unit,
+            stock: qty,
+            precio_compra: cost,
+            precio_venta: price,
+            stock_minimo: min
+          });
+          pid = product.id;
+        } else {
+          pid = parseInt(bProd.value);
+          if (!pid) throw new Error("Selecciona un producto");
+          const p = productos.find(x => x.id == pid);
+          // Update existing product stock/cost
+          await updateData('productos', pid, { 
+            stock: Number(p.stock) + qty, 
+            precio_compra: cost 
+          });
+        }
+
+        // 2. Register purchase
+        await addData('compras', { 
+          producto_id: pid, 
+          cantidad: qty, 
+          costo_unidad: cost, 
+          total: qty * cost, 
+          fecha: new Date().toISOString() 
+        });
+
+        toast(isNew ? "Producto agregado y stock registrado" : "Stock actualizado con éxito");
         navigate('compras');
-      } catch (ex) { toast(ex.message, "error"); }
+      } catch (ex) { 
+        toast(ex.message, "error"); 
+        btn.disabled = false;
+        btn.innerText = '📦 REGISTRAR COMPRA';
+      }
     };
   }
 };
