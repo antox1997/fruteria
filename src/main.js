@@ -121,31 +121,9 @@ const renderView = async (module, action, params) => {
 };
 
 // --- LOGIN & AUTH ---
-const renderLogin = (mode = 'login') => {
+const renderLogin = () => {
   const nav = document.querySelector('nav');
   if (nav) nav.style.display = 'none';
-
-  if (mode === 'success_register') {
-    app.innerHTML = `
-      <div style="max-width: 450px; margin: 80px auto; padding: 3rem; text-align: center; background: white; border-radius: var(--radius-lg); box-shadow: var(--shadow-lg);">
-        <div style="font-size: 5rem; margin-bottom: 1.5rem;">📧</div>
-        <h1 style="color: var(--primary); margin-bottom: 1rem;">¡Casi listo!</h1>
-        <p style="font-size: 1.1rem; color: var(--text-main); margin-bottom: 1.5rem; line-height: 1.6;">
-          Hemos enviado un <strong>enlace de confirmación</strong> a tu correo electrónico.
-        </p>
-        <div style="background: var(--primary-light); padding: 1.5rem; border-radius: var(--radius-md); text-align: left; margin-bottom: 2rem; border-left: 4px solid var(--primary);">
-          <p style="font-size: 0.9rem; color: var(--primary-dark); font-weight: 600;">
-            ⚠️ IMPORTANTE: Debes hacer clic en el botón dentro del correo para activar tu cuenta y poder entrar a tu tienda.
-          </p>
-        </div>
-        <button class="btn btn-secondary btn-block" onclick="navigate('login')">VOLVER AL INICIO DE SESIÓN</button>
-        <p style="margin-top: 1.5rem; font-size: 0.85rem; color: var(--text-muted);">
-          ¿No recibiste nada? Revisa tu carpeta de <strong>SPAM</strong>.
-        </p>
-      </div>
-    `;
-    return;
-  }
 
   app.innerHTML = `
     <div style="max-width: 420px; margin: 60px auto; padding: 2.5rem; text-align: center; background: white; border-radius: var(--radius-lg); box-shadow: var(--shadow-lg);">
@@ -164,20 +142,12 @@ const renderLogin = (mode = 'login') => {
         </div>
         
         <button type="submit" id="mainAuthBtn" class="btn btn-primary btn-block" style="padding: 1.2rem; font-size: 1.1rem; letter-spacing: 0.5px; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);">
-          ${mode === 'login' ? 'ENTRAR A MI TIENDA' : 'CREAR MI CUENTA GRATIS'}
+          ENTRAR A MI TIENDA
         </button>
-        
-        <div style="margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid var(--border);">
-          <p id="toggleAuth" style="color: var(--info); font-size: 0.95rem; font-weight: 700; cursor: pointer; display: inline-block;">
-            ${mode === 'login' ? '¿Eres nuevo? Regístrate aquí' : '¿Ya tienes cuenta? Inicia sesión'}
-          </p>
-        </div>
       </form>
       <p id="authError" style="color: var(--danger); font-size: 0.9rem; margin-top: 1.5rem; padding: 1rem; background: #fef2f2; border-radius: var(--radius-sm); border-left: 4px solid var(--danger); display: none; text-align: left;"></p>
     </div>
   `;
-
-  document.getElementById('toggleAuth').onclick = () => renderLogin(mode === 'login' ? 'register' : 'login');
 
   document.getElementById('authForm').onsubmit = async (e) => {
     e.preventDefault();
@@ -191,19 +161,13 @@ const renderLogin = (mode = 'login') => {
     btn.innerHTML = '<div class="loading-spinner" style="margin: 0 auto;"></div>';
 
     try {
-      if (mode === 'login') {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.auth.signUp({ email, password });
-        if (error) throw error;
-        renderLogin('success_register');
-      }
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw error;
     } catch (err) {
       errBox.innerText = "❌ " + err.message;
       errBox.style.display = 'block';
       btn.disabled = false;
-      btn.innerText = mode === 'login' ? 'ENTRAR A MI TIENDA' : 'CREAR MI CUENTA GRATIS';
+      btn.innerText = 'ENTRAR A MI TIENDA';
     }
   };
 };
@@ -241,7 +205,7 @@ const renderDashboard = async (container) => {
     </div>
 
     <div style="margin-bottom: 2rem; display:grid; gap:10px;">
-      <button class="btn btn-primary" style="padding: 1.5rem; font-size: 1.2rem; border-radius: var(--radius-lg);" onclick="navigate('ventas')">
+      <button class="btn btn-primary" style="padding: 1.5rem; font-size: 1.2rem; border-radius: var(--radius-lg);" onclick="navigate('ventas', 'create')">
         🚀 NUEVA VENTA RÁPIDA
       </button>
       <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
@@ -267,156 +231,232 @@ const renderDashboard = async (container) => {
 };
 
 const renderVentas = async (container, action) => {
-  showLoading(container);
-  const [productos, clientes] = await Promise.all([fetchData('productos'), fetchData('clientes')]);
-  currentSale = [];
+  if (action === 'list') {
+    showLoading(container);
+    const [ventas, clientes] = await Promise.all([fetchData('ventas'), fetchData('clientes')]);
 
-  container.innerHTML = `
-    <div class="form-group" style="position: sticky; top: 0; background: var(--bg-app); z-index: 10; padding: 10px 0;">
-      <input type="text" id="vSearch" placeholder="🔍 Buscar producto por nombre..." style="box-shadow: var(--shadow-md);">
-    </div>
-
-    <div class="quick-sale-grid" id="productGrid">
-      ${productos.filter(p => Number(p.stock) > 0).map(p => `
-        <div class="product-item" data-id="${p.id}" data-name="${p.nombre.toLowerCase()}" onclick="window.vAdd(${p.id})">
-          <div class="product-count" id="badge-${p.id}">0</div>
-          <div style="font-size: 1.2rem; margin-bottom: 4px;">${p.unidad === 'kg' ? '⚖️' : '🍎'}</div>
-          <div style="font-weight: 700; font-size: 0.9rem; margin-bottom: 4px;">${p.nombre}</div>
-          <div style="color: var(--primary); font-weight: 800;">$${Number(p.precio_venta).toFixed(2)}</div>
-          <div style="font-size: 0.7rem; color: var(--text-muted); opacity: 0.8;">DISP: ${p.stock}</div>
-        </div>
-      `).join('')}
-    </div>
-
-    <div id="vCart" style="display:none; position:fixed; bottom: 85px; left: 1rem; right: 1rem; background: var(--bg-card); padding: 1rem; border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); border: 2px solid var(--primary); z-index: 500;" class="animate-fade-in">
-        <div style="display:flex; justify-content:space-between; align-items:center;">
-          <div>
-            <div id="vItems" style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">0 kg / unid</div>
-            <div style="font-size: 1.6rem; font-weight: 900; color: var(--primary);">$<span id="vTotal">0.00</span></div>
-          </div>
-          <button class="btn btn-primary" style="padding: 1rem 2rem;" onclick="window.vCheckout()">CONTINUAR ➔</button>
-        </div>
-    </div>
-  `;
-
-  document.getElementById('vSearch').oninput = (e) => {
-    const term = e.target.value.toLowerCase();
-    document.querySelectorAll('.product-item').forEach(el => {
-      el.style.display = el.dataset.name.includes(term) ? 'block' : 'none';
-    });
-  };
-
-  // Logic globally attached for onclick
-  window.vAdd = (pid) => {
-    const p = productos.find(x => x.id === pid);
-    const qty = prompt(`¿Cuánto vas a vender de ${p.nombre}? (${p.unidad})`, p.unidad === 'kg' ? '1.0' : '1');
-    const nQty = parseFloat(qty);
-    if (!nQty || nQty <= 0) return;
-    if (nQty > Number(p.stock)) return toast("No hay suficiente stock", "error");
-
-    const existing = currentSale.find(x => x.id === pid);
-    if (existing) existing.quantity = nQty;
-    else currentSale.push({ ...p, quantity: nQty });
-
-    // Update UI
-    const badge = document.getElementById(`badge-${pid}`);
-    badge.innerText = p.unidad === 'kg' ? nQty.toFixed(1) : nQty;
-    badge.classList.add('visible');
-
-    const cart = document.getElementById('vCart');
-    cart.style.display = 'block';
-
-    const total = currentSale.reduce((a, b) => a + (Number(b.precio_venta) * b.quantity), 0);
-    document.getElementById('vTotal').innerText = total.toFixed(2);
-    document.getElementById('vItems').innerText = `${currentSale.length} productos / ${currentSale.reduce((a, b) => a + b.quantity, 0).toFixed(1)} ${p.unidad}`;
-  };
-
-  window.vCheckout = () => {
-    modalOverlay.classList.add('active');
-    const total = currentSale.reduce((a, b) => a + (Number(b.precio_venta) * b.quantity), 0);
-
-    const content = document.getElementById('modal-content');
-    content.innerHTML = `
-      <h2>Confirmar Cobro</h2>
-      <div style="margin-bottom: 2rem; max-height: 200px; overflow-y: auto;">
-        ${currentSale.map(i => `<div style="display:flex; justify-content:space-between; padding: 8px 0; border-bottom: 1px solid var(--border);">
-          <span>${i.quantity} ${i.unidad} ${i.nombre}</span>
-          <span style="font-weight:700;">$${(Number(i.precio_venta) * i.quantity).toFixed(2)}</span>
-        </div>`).join('')}
-        <div style="display:flex; justify-content:space-between; padding: 1rem 0; font-size: 1.4rem; font-weight: 900; color: var(--primary);">
-          <span>TOTAL</span>
-          <span>$${total.toFixed(2)}</span>
-        </div>
+    container.innerHTML = `
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 1.5rem;">
+        <h3>${ventas.length} Ventas realizadas</h3>
+        <button class="btn btn-primary" onclick="navigate('ventas', 'create')">＋ NUEVA VENTA</button>
       </div>
 
-      <div class="form-group">
-        <label>Método de Pago</label>
-        <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-          <button class="btn btn-secondary" id="btnCash" style="border: 2px solid var(--primary);">💵 EFECTIVO</button>
-          <button class="btn btn-secondary" id="btnCredit">🛡️ FIADO / DEUDA</button>
-        </div>
-      </div>
-
-      <div id="clientSelect" style="display:none;" class="animate-fade-in">
-        <div class="form-group">
-          <label>Seleccionar Cliente</label>
-          <select id="selClientId">
-            <option value="">-- Elige un cliente --</option>
-            ${clientes.map(c => `<option value="${c.id}">${c.nombre} (Debe: $${c.saldo_deuda})</option>`).join('')}
-          </select>
-        </div>
-      </div>
-
-      <div style="display:grid; gap: 10px; margin-top: 2rem;">
-        <button class="btn btn-primary" id="btnFinish">FINALIZAR VENTA</button>
-        <button class="btn btn-ghost" onclick="closeModal()">VOLVER ATRÁS</button>
+      <div class="card" style="padding:0;">
+        <table class="data-table" style="width:100%; border-collapse: collapse;">
+          <thead style="background: var(--bg-app); font-size: 0.75rem; text-align:left;">
+            <tr>
+              <th style="padding:1rem;">Fecha</th>
+              <th>Cliente</th>
+              <th>Total</th>
+              <th style="text-align:right; padding-right:1rem;">Ver</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${ventas.reverse().map(v => {
+      const cliente = clientes.find(c => c.id === v.cliente_id);
+      return `
+                <tr style="border-bottom: 1px solid var(--border);">
+                  <td style="padding:1rem; font-size: 0.85rem;">${new Date(v.fecha).toLocaleDateString()} ${new Date(v.fecha).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
+                  <td style="font-size: 0.85rem;">${cliente ? cliente.nombre : '<span style="color:var(--text-muted)">Contado</span>'}</td>
+                  <td style="font-weight:700; color:var(--primary);">$${Number(v.total).toFixed(2)}</td>
+                  <td style="text-align:right; padding-right:1rem;">
+                    <button class="btn btn-ghost" onclick="window.vShowDetail(${v.id})">👁️</button>
+                  </td>
+                </tr>
+              `;
+    }).join('')}
+          </tbody>
+        </table>
       </div>
     `;
 
-    let selectedClientId = null;
-    document.getElementById('btnCash').onclick = () => {
-      selectedClientId = null;
-      document.getElementById('btnCash').style.border = '2px solid var(--primary)';
-      document.getElementById('btnCredit').style.border = 'none';
-      document.getElementById('clientSelect').style.display = 'none';
+    window.vShowDetail = async (id) => {
+      showLoading(document.getElementById('modal-content'));
+      modalOverlay.classList.add('active');
+      const [detalles, productos] = await Promise.all([fetchData('detalles_venta'), fetchData('productos')]);
+      const items = detalles.filter(d => d.venta_id === id);
+      const venta = ventas.find(v => v.id === id);
+      const cliente = clientes.find(c => c.id === venta.cliente_id);
+
+      const content = document.getElementById('modal-content');
+      content.innerHTML = `
+        <h2>Detalle de Venta #${id.toString().slice(-4)}</h2>
+        <div style="margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border);">
+          <div style="font-size: 0.9rem; color: var(--text-muted);">Fecha: ${new Date(venta.fecha).toLocaleString()}</div>
+          <div style="font-size: 0.9rem; color: var(--text-muted);">Cliente: ${cliente ? cliente.nombre : 'Contado'}</div>
+        </div>
+        <div style="margin-bottom: 2rem; max-height: 300px; overflow-y: auto;">
+          ${items.map(i => {
+        const p = productos.find(x => x.id === i.producto_id);
+        return `
+              <div style="display:flex; justify-content:space-between; padding: 8px 0; border-bottom: 1px solid var(--border);">
+                <span>${i.cantidad} ${p?.unidad || ''} ${p?.nombre || 'Producto'}</span>
+                <span style="font-weight:700;">$${(Number(i.precio_unitario) * i.cantidad).toFixed(2)}</span>
+              </div>
+            `;
+      }).join('')}
+          <div style="display:flex; justify-content:space-between; padding: 1rem 0; font-size: 1.4rem; font-weight: 900; color: var(--primary);">
+            <span>TOTAL</span>
+            <span>$${Number(venta.total).toFixed(2)}</span>
+          </div>
+        </div>
+        <button class="btn btn-primary btn-block" onclick="closeModal()">CERRAR</button>
+      `;
     };
-    document.getElementById('btnCredit').onclick = () => {
-      document.getElementById('btnCredit').style.border = '2px solid var(--primary)';
-      document.getElementById('btnCash').style.border = 'none';
-      document.getElementById('clientSelect').style.display = 'block';
+
+  } else {
+    // action === 'create'
+    showLoading(container);
+    const [productos, clientes] = await Promise.all([fetchData('productos'), fetchData('clientes')]);
+    currentSale = [];
+
+    container.innerHTML = `
+      <div class="form-group" style="position: sticky; top: 0; background: var(--bg-app); z-index: 10; padding: 10px 0;">
+        <input type="text" id="vSearch" placeholder="🔍 Buscar producto por nombre..." style="box-shadow: var(--shadow-md);">
+      </div>
+
+      <div class="quick-sale-grid" id="productGrid">
+        ${productos.filter(p => Number(p.stock) > 0).map(p => `
+          <div class="product-item" data-id="${p.id}" data-name="${p.nombre.toLowerCase()}" onclick="window.vAdd(${p.id})">
+            <div class="product-count" id="badge-${p.id}">0</div>
+            <div style="font-size: 1.2rem; margin-bottom: 4px;">${p.unidad === 'kg' ? '⚖️' : '🍎'}</div>
+            <div style="font-weight: 700; font-size: 0.9rem; margin-bottom: 4px;">${p.nombre}</div>
+            <div style="color: var(--primary); font-weight: 800;">$${Number(p.precio_venta).toFixed(2)}</div>
+            <div style="font-size: 0.7rem; color: var(--text-muted); opacity: 0.8;">DISP: ${p.stock}</div>
+          </div>
+        `).join('')}
+      </div>
+
+      <div id="vCart" style="display:none; position:fixed; bottom: 85px; left: 1rem; right: 1rem; background: var(--bg-card); padding: 1rem; border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); border: 2px solid var(--primary); z-index: 500;" class="animate-fade-in">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div>
+              <div id="vItems" style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">0 kg / unid</div>
+              <div style="font-size: 1.6rem; font-weight: 900; color: var(--primary);">$<span id="vTotal">0.00</span></div>
+            </div>
+            <button class="btn btn-primary" style="padding: 1rem 2rem;" onclick="window.vCheckout()">CONTINUAR ➔</button>
+          </div>
+      </div>
+    `;
+
+    document.getElementById('vSearch').oninput = (e) => {
+      const term = e.target.value.toLowerCase();
+      document.querySelectorAll('.product-item').forEach(el => {
+        el.style.display = el.dataset.name.includes(term) ? 'block' : 'none';
+      });
     };
 
-    document.getElementById('btnFinish').onclick = async () => {
-      if (document.getElementById('clientSelect').style.display === 'block') {
-        selectedClientId = document.getElementById('selClientId').value;
-        if (!selectedClientId) return toast("Selecciona un cliente para fiar", "error");
-      }
+    // Logic globally attached for onclick
+    window.vAdd = (pid) => {
+      const p = productos.find(x => x.id === pid);
+      const qty = prompt(`¿Cuánto vas a vender de ${p.nombre}? (${p.unidad})`, p.unidad === 'kg' ? '1.0' : '1');
+      const nQty = parseFloat(qty);
+      if (!nQty || nQty <= 0) return;
+      if (nQty > Number(p.stock)) return toast("No hay suficiente stock", "error");
 
-      const btn = document.getElementById('btnFinish');
-      btn.disabled = true;
-      btn.innerHTML = '<div class="loading-spinner"></div>';
+      const existing = currentSale.find(x => x.id === pid);
+      if (existing) existing.quantity = nQty;
+      else currentSale.push({ ...p, quantity: nQty });
 
-      try {
-        const sale = await addData('ventas', { total, cliente_id: selectedClientId });
-        for (const item of currentSale) {
-          await addData('detalles_venta', {
-            venta_id: sale.id,
-            producto_id: item.id,
-            cantidad: item.quantity,
-            precio_unitario: item.precio_venta
-          });
-          await updateData('productos', item.id, { stock: Number(item.stock) - item.quantity });
+      // Update UI
+      const badge = document.getElementById(`badge-${pid}`);
+      badge.innerText = p.unidad === 'kg' ? nQty.toFixed(1) : nQty;
+      badge.classList.add('visible');
+
+      const cart = document.getElementById('vCart');
+      cart.style.display = 'block';
+
+      const total = currentSale.reduce((a, b) => a + (Number(b.precio_venta) * b.quantity), 0);
+      document.getElementById('vTotal').innerText = total.toFixed(2);
+      document.getElementById('vItems').innerText = `${currentSale.length} productos / ${currentSale.reduce((a, b) => a + b.quantity, 0).toFixed(1)} ${p.unidad}`;
+    };
+
+    window.vCheckout = () => {
+      modalOverlay.classList.add('active');
+      const total = currentSale.reduce((a, b) => a + (Number(b.precio_venta) * b.quantity), 0);
+
+      const content = document.getElementById('modal-content');
+      content.innerHTML = `
+        <h2>Confirmar Cobro</h2>
+        <div style="margin-bottom: 2rem; max-height: 200px; overflow-y: auto;">
+          ${currentSale.map(i => `<div style="display:flex; justify-content:space-between; padding: 8px 0; border-bottom: 1px solid var(--border);">
+            <span>${i.quantity} ${i.unidad} ${i.nombre}</span>
+            <span style="font-weight:700;">$${(Number(i.precio_venta) * i.quantity).toFixed(2)}</span>
+          </div>`).join('')}
+          <div style="display:flex; justify-content:space-between; padding: 1rem 0; font-size: 1.4rem; font-weight: 900; color: var(--primary);">
+            <span>TOTAL</span>
+            <span>$${total.toFixed(2)}</span>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Método de Pago</label>
+          <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <button class="btn btn-secondary" id="btnCash" style="border: 2px solid var(--primary);">💵 EFECTIVO</button>
+            <button class="btn btn-secondary" id="btnCredit">🛡️ FIADO / DEUDA</button>
+          </div>
+        </div>
+
+        <div id="clientSelect" style="display:none;" class="animate-fade-in">
+          <div class="form-group">
+            <label>Seleccionar Cliente</label>
+            <select id="selClientId">
+              <option value="">-- Elige un cliente --</option>
+              ${clientes.map(c => `<option value="${c.id}">${c.nombre} (Debe: $${c.saldo_deuda})</option>`).join('')}
+            </select>
+          </div>
+        </div>
+
+        <div style="display:grid; gap: 10px; margin-top: 2rem;">
+          <button class="btn btn-primary" id="btnFinish">FINALIZAR VENTA</button>
+          <button class="btn btn-ghost" onclick="closeModal()">VOLVER ATRÁS</button>
+        </div>
+      `;
+
+      let selectedClientId = null;
+      document.getElementById('btnCash').onclick = () => {
+        selectedClientId = null;
+        document.getElementById('btnCash').style.border = '2px solid var(--primary)';
+        document.getElementById('btnCredit').style.border = 'none';
+        document.getElementById('clientSelect').style.display = 'none';
+      };
+      document.getElementById('btnCredit').onclick = () => {
+        document.getElementById('btnCredit').style.border = '2px solid var(--primary)';
+        document.getElementById('btnCash').style.border = 'none';
+        document.getElementById('clientSelect').style.display = 'block';
+      };
+
+      document.getElementById('btnFinish').onclick = async () => {
+        if (document.getElementById('clientSelect').style.display === 'block') {
+          selectedClientId = document.getElementById('selClientId').value;
+          if (!selectedClientId) return toast("Selecciona un cliente para fiar", "error");
         }
-        if (selectedClientId) {
-          const c = clientes.find(x => x.id == selectedClientId);
-          await updateData('clientes', selectedClientId, { saldo_deuda: Number(c.saldo_deuda) + total });
-        }
-        toast("Venta realizada con éxito");
-        closeModal();
-        navigate('dashboard');
-      } catch (e) { toast("Error: " + e.message, "error"); btn.disabled = false; btn.innerText = 'FINALIZAR'; }
+
+        const btn = document.getElementById('btnFinish');
+        btn.disabled = true;
+        btn.innerHTML = '<div class="loading-spinner"></div>';
+
+        try {
+          const sale = await addData('ventas', { total, cliente_id: selectedClientId });
+          for (const item of currentSale) {
+            await addData('detalles_venta', {
+              venta_id: sale.id,
+              producto_id: item.id,
+              cantidad: item.quantity,
+              precio_unitario: item.precio_venta
+            });
+            await updateData('productos', item.id, { stock: Number(item.stock) - item.quantity });
+          }
+          if (selectedClientId) {
+            const c = clientes.find(x => x.id == selectedClientId);
+            await updateData('clientes', selectedClientId, { saldo_deuda: Number(c.saldo_deuda) + total });
+          }
+          toast("Venta realizada con éxito");
+          closeModal();
+          navigate('ventas'); // Go back to sales list
+        } catch (e) { toast("Error: " + e.message, "error"); btn.disabled = false; btn.innerText = 'FINALIZAR'; }
+      };
     };
-  };
+  }
 };
 
 const renderInventario = async (container, action, params) => {
@@ -575,16 +615,47 @@ const renderClientes = async (container, action, params) => {
     window.cPay = async (id, name) => {
       const clis = await fetchData('clientes');
       const c = clis.find(x => x.id == id);
-      const m = prompt(`¿Cuánto abona ${name}? (Deuda: $${c.saldo_deuda})`);
-      const val = parseFloat(m);
-      if (!val || val <= 0) return;
-
-      try {
-        await updateData('clientes', id, { saldo_deuda: Number(c.saldo_deuda) - val });
-        await addData('pagos', { cliente_id: id, monto: val, fecha: new Date().toISOString() });
-        toast("Pago registrado");
-        navigate('clientes');
-      } catch (e) { toast("Error: " + e.message, "error"); }
+      
+      modalOverlay.classList.add('active');
+      const content = document.getElementById('modal-content');
+      content.innerHTML = `
+        <h2>Registrar Abono</h2>
+        <p style="margin-bottom: 1.5rem; color: var(--text-muted);">
+          Registrando pago para: <strong>${name}</strong><br>
+          Deuda actual: <span style="color: var(--danger); font-weight: 700;">$${Number(c.saldo_deuda).toFixed(2)}</span>
+        </p>
+        
+        <div class="form-group">
+          <label>Monto a abonar ($)</label>
+          <input type="number" id="payAmount" step="0.01" value="${c.saldo_deuda}" autofocus>
+        </div>
+        
+        <div style="display:grid; gap: 10px; margin-top: 2rem;">
+          <button class="btn btn-primary" id="btnConfirmPay">REGISTRAR PAGO</button>
+          <button class="btn btn-ghost" onclick="closeModal()">CANCELAR</button>
+        </div>
+      `;
+      
+      document.getElementById('btnConfirmPay').onclick = async () => {
+        const val = parseFloat(document.getElementById('payAmount').value);
+        if (!val || val <= 0) return toast("Monto inválido", "error");
+        
+        const btn = document.getElementById('btnConfirmPay');
+        btn.disabled = true;
+        btn.innerHTML = '<div class="loading-spinner"></div>';
+        
+        try {
+          await updateData('clientes', id, { saldo_deuda: Number(c.saldo_deuda) - val });
+          await addData('pagos', { cliente_id: id, monto: val, fecha: new Date().toISOString() });
+          toast("Pago registrado con éxito");
+          closeModal();
+          navigate('clientes');
+        } catch (e) { 
+          toast("Error: " + e.message, "error"); 
+          btn.disabled = false;
+          btn.innerText = 'REGISTRAR PAGO';
+        }
+      };
     };
 
   } else {
