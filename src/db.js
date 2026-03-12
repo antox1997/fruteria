@@ -7,13 +7,9 @@ const getUserId = async () => {
 };
 
 export const fetchData = async (entity) => {
-  const userId = await getUserId();
-  if (!userId) return [];
-
   const { data, error } = await supabase
     .from(entity)
-    .select('*')
-    .eq('perfil_id', userId);
+    .select('*');
 
   if (error) {
     console.error(`Error fetching ${entity}:`, error);
@@ -37,12 +33,10 @@ export const addData = async (entity, data) => {
 };
 
 export const updateData = async (entity, id, data) => {
-  const userId = await getUserId();
   const { data: result, error } = await supabase
     .from(entity)
     .update(data)
     .eq('id', id)
-    .eq('perfil_id', userId)
     .select()
     .single();
 
@@ -51,12 +45,10 @@ export const updateData = async (entity, id, data) => {
 };
 
 export const deleteData = async (entity, id) => {
-  const userId = await getUserId();
   const { error } = await supabase
     .from(entity)
     .delete()
-    .eq('id', id)
-    .eq('perfil_id', userId);
+    .eq('id', id);
 
   if (error) throw error;
   return true;

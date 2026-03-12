@@ -4,6 +4,7 @@ import { supabase } from './supabase.js';
 
 // --- APPLICATION STATE ---
 let user = null;
+let profile = { nombre_tienda: 'Frutería Los Amigos' }; // Tienda única
 let currentModule = 'dashboard';
 let currentAction = 'list'; // list, create, edit
 let currentSale = []; // { product, quantity }
@@ -224,8 +225,8 @@ const renderDashboard = async (container) => {
 
   container.innerHTML = `
     <div class="card" style="background: var(--primary); color: white; border: none; padding: 2rem;">
-      <h2 style="margin: 0;">¡Hola de nuevo! 👋</h2>
-      <p style="opacity: 0.9; margin-top: 5px;">${user.email} (${user.rol || 'Staff'})</p>
+      <h2 style="margin: 0;">${profile.nombre_tienda} 🍎</h2>
+      <p style="opacity: 0.9; margin-top: 5px;">Usuario: ${user.email}</p>
     </div>
 
     <div class="stats-grid">
@@ -422,12 +423,10 @@ const renderInventario = async (container, action, params) => {
   if (action === 'list') {
     showLoading(container);
     const productos = await fetchData('productos');
-    const isAdmin = user.rol === 'admin';
-
     container.innerHTML = `
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 1.5rem;">
         <h3>${productos.length} Productos</h3>
-        ${isAdmin ? `<button class="btn btn-primary" onclick="navigate('productos', 'create')">＋ NUEVO PRODUCTO</button>` : ''}
+        <button class="btn btn-primary" onclick="navigate('productos', 'create')">＋ NUEVO PRODUCTO</button>
       </div>
 
       <div class="card" style="padding:0;">
@@ -437,7 +436,7 @@ const renderInventario = async (container, action, params) => {
               <th style="padding:1rem;">Nombre</th>
               <th>Stock</th>
               <th>Venta</th>
-              ${isAdmin ? '<th style="text-align:right; padding-right:1rem;">Opciones</th>' : ''}
+              <th style="text-align:right; padding-right:1rem;">Opciones</th>
             </tr>
           </thead>
           <tbody>
@@ -446,11 +445,10 @@ const renderInventario = async (container, action, params) => {
                 <td style="padding:1rem; font-weight:600;">${p.nombre}</td>
                 <td><span class="stock-badge ${Number(p.stock) <= 5 ? 'stock-low' : ''}">${p.stock} ${p.unidad}</span></td>
                 <td style="font-weight:700; color:var(--primary);">$${Number(p.precio_venta).toFixed(2)}</td>
-                ${isAdmin ? `
                 <td style="text-align:right; padding-right:1rem;">
                   <button class="btn btn-ghost" onclick="navigate('productos', 'edit', { id: ${p.id}, name: '${p.nombre}' })">✏️</button>
                   <button class="btn btn-ghost" onclick="window.vDeleteProd(${p.id}, '${p.nombre}')">🗑️</button>
-                </td>` : ''}
+                </td>
               </tr>
             `).join('')}
           </tbody>
@@ -751,10 +749,6 @@ window.closeModal = () => modalOverlay.classList.remove('active');
 const checkSession = async () => {
   const { data } = await supabase.auth.getSession();
   user = data.session?.user || null;
-  if (user) {
-    const { data: profile } = await supabase.from('perfiles').select('rol').eq('id', user.id).single();
-    if (profile) user.rol = profile.rol;
-  }
   initNav();
   navigate(user ? 'dashboard' : 'login');
 };
