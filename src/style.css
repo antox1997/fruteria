@@ -418,3 +418,191 @@ input:focus {
     transform: translateY(0);
   }
 }
+
+/* ──────────────────────────────────────────
+   Report Modal
+────────────────────────────────────────── */
+
+/* Report uses a centered dialog style (not slide-from-bottom) */
+#report-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2100;
+  visibility: hidden;
+  opacity: 0;
+  transition: all 0.3s ease;
+  padding: 1rem;
+}
+
+#report-modal-overlay.active {
+  visibility: visible;
+  opacity: 1;
+}
+
+#report-modal-content {
+  background: var(--bg-card);
+  width: 100%;
+  max-width: 560px;
+  border-radius: var(--radius-lg);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  padding: 1.5rem;
+  max-height: 88vh;
+  overflow-y: auto;
+  transform: scale(0.95) translateY(12px);
+  transition: transform 0.3s ease;
+}
+
+#report-modal-overlay.active #report-modal-content {
+  transform: scale(1) translateY(0);
+}
+
+.report-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.report-section {
+  margin-bottom: 1.25rem;
+}
+
+.report-label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin-bottom: 0.6rem;
+}
+
+/* Module chips */
+.report-chip-group {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.report-chip {
+  padding: 0.5rem 1rem;
+  border-radius: 999px;
+  border: 2px solid var(--border);
+  background: var(--bg-app);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.report-chip:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.report-chip.active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: white;
+}
+
+/* Quick date buttons */
+.report-quick-btns {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.report-quick-btn {
+  padding: 0.45rem 0.85rem;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--border);
+  background: var(--bg-app);
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.report-quick-btn:hover {
+  border-color: var(--secondary);
+  color: var(--secondary);
+}
+
+.report-quick-btn.active {
+  background: var(--secondary);
+  border-color: var(--secondary);
+  color: white;
+}
+
+/* Result table */
+.report-table-wrapper {
+  overflow-x: auto;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+}
+
+.report-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.report-table thead {
+  background: var(--bg-app);
+}
+
+.report-table th {
+  padding: 0.7rem 0.85rem;
+  text-align: left;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.report-table td {
+  padding: 0.7rem 0.85rem;
+  border-top: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.report-table tbody tr:hover {
+  background: var(--primary-light);
+}
+
+/* Summary bar */
+.report-summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 0.75rem;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.report-total {
+  color: var(--primary);
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+/* Empty state */
+.report-empty {
+  text-align: center;
+  padding: 2rem;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}

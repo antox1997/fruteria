@@ -1,6 +1,7 @@
 import './style.css';
 import { fetchData, addData, updateData, deleteData } from './db.js';
 import { supabase } from './supabase.js';
+import { openReportModal } from './reportes.js';
 
 // --- APPLICATION STATE ---
 let user = null;
@@ -212,6 +213,9 @@ const renderDashboard = async (container) => {
          <button class="btn btn-secondary" onclick="navigate('productos')">📦 Stock</button>
          <button class="btn btn-secondary" onclick="navigate('compras')">🚚 Compras</button>
       </div>
+      <button class="btn" id="btnGenerarReporte" style="background: linear-gradient(135deg, var(--secondary) 0%, #4f46e5 100%); color: white; padding: 0.9rem; border-radius: var(--radius-md); font-size: 1rem; letter-spacing: 0.3px; box-shadow: 0 4px 14px rgba(99,102,241,0.35);">
+        📊 Generar Reporte
+      </button>
     </div>
 
     ${lowStock.length > 0 ? `
@@ -228,6 +232,7 @@ const renderDashboard = async (container) => {
   `;
 
   document.getElementById('btnLogout').onclick = () => supabase.auth.signOut();
+  document.getElementById('btnGenerarReporte').onclick = () => openReportModal();
 };
 
 const renderVentas = async (container, action) => {
@@ -594,9 +599,9 @@ const renderClientes = async (container, action, params) => {
       </div>
 
       ${clientes.map(c => {
-        const saldo = Number(c.saldo_deuda);
-        const isDebt = saldo > 0;
-        return `
+      const saldo = Number(c.saldo_deuda);
+      const isDebt = saldo > 0;
+      return `
           <div class="card animate-fade-in" style="display:flex; justify-content:space-between; align-items:center;">
             <div>
               <div style="font-weight:800; font-size:1.1rem;">${c.nombre}</div>
@@ -613,13 +618,13 @@ const renderClientes = async (container, action, params) => {
             </div>
           </div>
         `;
-      }).join('')}
+    }).join('')}
     `;
 
     window.cPay = async (id, name) => {
       const clis = await fetchData('clientes');
       const c = clis.find(x => x.id == id);
-      
+
       modalOverlay.classList.add('active');
       const content = document.getElementById('modal-content');
       content.innerHTML = `
@@ -639,23 +644,23 @@ const renderClientes = async (container, action, params) => {
           <button class="btn btn-ghost" onclick="closeModal()">CANCELAR</button>
         </div>
       `;
-      
+
       document.getElementById('btnConfirmPay').onclick = async () => {
         const val = parseFloat(document.getElementById('payAmount').value);
         if (!val || val <= 0) return toast("Monto inválido", "error");
-        
+
         const btn = document.getElementById('btnConfirmPay');
         btn.disabled = true;
         btn.innerHTML = '<div class="loading-spinner"></div>';
-        
+
         try {
           await updateData('clientes', id, { saldo_deuda: Number(c.saldo_deuda) - val });
           await addData('pagos', { cliente_id: id, monto: val, fecha: new Date().toISOString() });
           toast("Pago registrado con éxito");
           closeModal();
           navigate('clientes');
-        } catch (e) { 
-          toast("Error: " + e.message, "error"); 
+        } catch (e) {
+          toast("Error: " + e.message, "error");
           btn.disabled = false;
           btn.innerText = 'REGISTRAR PAGO';
         }
@@ -805,13 +810,13 @@ const renderCompras = async (container, action, params) => {
       existingFields.style.display = isNew ? 'none' : 'block';
       newFields.style.display = isNew ? 'block' : 'none';
       if (!isNew) {
-         document.getElementById('pName').required = false;
-         document.getElementById('pPrice').required = false;
-         document.getElementById('bProd').required = true;
+        document.getElementById('pName').required = false;
+        document.getElementById('pPrice').required = false;
+        document.getElementById('bProd').required = true;
       } else {
-         document.getElementById('pName').required = true;
-         document.getElementById('pPrice').required = true;
-         document.getElementById('bProd').required = false;
+        document.getElementById('pName').required = true;
+        document.getElementById('pPrice').required = true;
+        document.getElementById('bProd').required = false;
       }
     };
 
@@ -841,7 +846,7 @@ const renderCompras = async (container, action, params) => {
           const unit = document.getElementById('pUnit').value;
           const price = parseFloat(document.getElementById('pPrice').value);
           const min = parseInt(document.getElementById('pMin').value) || 5;
-          
+
           // 1. Create product
           const product = await addData('productos', {
             nombre: name,
@@ -857,25 +862,25 @@ const renderCompras = async (container, action, params) => {
           if (!pid) throw new Error("Selecciona un producto");
           const p = productos.find(x => x.id == pid);
           // Update existing product stock/cost
-          await updateData('productos', pid, { 
-            stock: Number(p.stock) + qty, 
-            precio_compra: cost 
+          await updateData('productos', pid, {
+            stock: Number(p.stock) + qty,
+            precio_compra: cost
           });
         }
 
         // 2. Register purchase
-        await addData('compras', { 
-          producto_id: pid, 
-          cantidad: qty, 
-          costo_unidad: cost, 
-          total: qty * cost, 
-          fecha: new Date().toISOString() 
+        await addData('compras', {
+          producto_id: pid,
+          cantidad: qty,
+          costo_unidad: cost,
+          total: qty * cost,
+          fecha: new Date().toISOString()
         });
 
         toast(isNew ? "Producto agregado y stock registrado" : "Stock actualizado con éxito");
         navigate('compras');
-      } catch (ex) { 
-        toast(ex.message, "error"); 
+      } catch (ex) {
+        toast(ex.message, "error");
         btn.disabled = false;
         btn.innerText = '📦 REGISTRAR COMPRA';
       }
