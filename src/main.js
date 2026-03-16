@@ -10,6 +10,7 @@ let currentModule = 'dashboard';
 let currentAction = 'list'; // list, create, edit
 let currentSale = []; // { product, quantity }
 let isProcessing = false;
+let editingSaleId = null; // ID of the sale being edited
 
 const app = document.getElementById('app');
 const nav = document.querySelector('nav');
@@ -253,7 +254,7 @@ const renderVentas = async (container, action) => {
               <th style="padding:1rem;">Fecha</th>
               <th>Cliente</th>
               <th>Total</th>
-              <th style="text-align:right; padding-right:1rem;">Ver</th>
+              <th style="text-align:right; padding-right:1rem;">Acciones</th>
             </tr>
           </thead>
           <tbody>
@@ -264,8 +265,10 @@ const renderVentas = async (container, action) => {
                   <td style="padding:1rem; font-size: 0.85rem;">${new Date(v.fecha).toLocaleDateString()} ${new Date(v.fecha).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
                   <td style="font-size: 0.85rem;">${cliente ? cliente.nombre : '<span style="color:var(--text-muted)">Contado</span>'}</td>
                   <td style="font-weight:700; color:var(--primary);">$${Number(v.total).toFixed(2)}</td>
-                  <td style="text-align:right; padding-right:1rem;">
-                    <button class="btn btn-ghost" onclick="window.vShowDetail(${v.id})">👁️</button>
+                  <td style="text-align:right; padding-right:1rem; display:flex; justify-content: flex-end; gap:5px;">
+                    <button class="btn btn-ghost" onclick="window.vShowDetail(${v.id})" title="Ver detalle">👁️</button>
+                    <button class="btn btn-ghost" onclick="window.vEditVenta(${v.id})" title="Editar venta">✏️</button>
+                    <button class="btn btn-ghost" onclick="window.vDeleteVenta(${v.id})" title="Eliminar venta">🗑️</button>
                   </td>
                 </tr>
               `;
@@ -274,6 +277,74 @@ const renderVentas = async (container, action) => {
         </table>
       </div>
     `;
+
+    window.vDeleteVenta = async (id) => {
+      if (!confirm(`¿Estás seguro de eliminar la venta #${id}? Se restará de la deuda del cliente y se devolverá el stock.`)) return;
+      
+      try {
+        const [detalles, venta, productos, todosClientes] = await Promise.all([
+          fetchData('detalles_venta'),
+          fetchData('ventas').then(vv => vv.find(x => x.id === id)),
+          fetchData('productos'),
+          fetchData('clientes')
+        ]);
+
+        const items = detalles.filter(d => d.venta_id === id);
+
+        // 1. Devolver Stock
+        for (const item of items) {
+          const p = productos.find(x => x.id === item.producto_id);
+          if (p) {
+            await updateData('productos', p.id, { stock: Number(p.stock) + Number(item.cantidad) });
+          }
+        }
+
+        // 2. Ajustar Deuda Cliente (si aplica)
+        if (venta.cliente_id) {
+          const c = todosClientes.find(x => x.id == venta.cliente_id);
+          if (c) {
+            await updateData('clientes', c.id, { saldo_deuda: Number(c.saldo_deuda) - Number(venta.total) });
+          }
+        }
+
+        // 3. Eliminar detalles y venta (Supabase cascade might handle details, but let's be explicit if not sure)
+        // Note: Assuming detalles_venta has a migration that deletes on cascade, if not we delete manually
+        // We'll delete venta, assuming cascade or we can delete details first.
+        // For safety in this environment where we don't see the schema:
+        for (const item of items) {
+          await deleteData('detalles_venta', item.id);
+        }
+        await deleteData('ventas', id);
+
+        toast("Venta eliminada correctamente");
+        navigate('ventas');
+      } catch (e) {
+        toast("Error al eliminar: " + e.message, "error");
+      }
+    };
+
+    window.vEditVenta = async (id) => {
+      showLoading(container);
+      try {
+        const [detalles, venta, productos] = await Promise.all([
+          fetchData('detalles_venta'),
+          fetchData('ventas').then(vv => vv.find(x => x.id === id)),
+          fetchData('productos')
+        ]);
+
+        const items = detalles.filter(d => d.venta_id === id);
+        currentSale = items.map(i => {
+          const p = productos.find(x => x.id === i.producto_id);
+          return { ...p, quantity: Number(i.cantidad) };
+        });
+
+        editingSaleId = id;
+        navigate('ventas', 'create');
+      } catch (e) {
+        toast("Error al cargar venta: " + e.message, "error");
+        navigate('ventas');
+      }
+    };
 
     window.vShowDetail = async (id) => {
       showLoading(document.getElementById('modal-content'));
@@ -313,9 +384,17 @@ const renderVentas = async (container, action) => {
     // action === 'create'
     showLoading(container);
     const [productos, clientes] = await Promise.all([fetchData('productos'), fetchData('clientes')]);
-    currentSale = [];
+    
+    // Only clear if not editing
+    if (!editingSaleId) {
+      currentSale = [];
+    }
 
     container.innerHTML = `
+      ${editingSaleId ? `<div style="background: var(--warning); color: white; padding: 10px; border-radius: 8px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
+          <span>✏️ Editando Venta #${editingSaleId}</span>
+          <button class="btn btn-ghost" style="color:white; padding: 5px;" onclick="window.vCancelEdit()">CANCELAR EDICIÓN</button>
+        </div>` : ''}
       <div class="form-group" style="position: sticky; top: 0; background: var(--bg-app); z-index: 10; padding: 10px 0;">
         <input type="text" id="vSearch" placeholder="🔍 Buscar producto por nombre..." style="box-shadow: var(--shadow-md);">
       </div>
@@ -342,6 +421,12 @@ const renderVentas = async (container, action) => {
           </div>
       </div>
     `;
+
+    window.vCancelEdit = () => {
+      editingSaleId = null;
+      currentSale = [];
+      navigate('ventas');
+    };
 
     document.getElementById('vSearch').oninput = (e) => {
       const term = e.target.value.toLowerCase();
@@ -404,9 +489,14 @@ const renderVentas = async (container, action) => {
         <div id="clientSelect" style="display:none;" class="animate-fade-in">
           <div class="form-group">
             <label>Seleccionar Cliente</label>
+            <input type="text" id="cSearch" placeholder="🔍 Buscar cliente..." style="margin-bottom: 10px;">
             <select id="selClientId">
               <option value="">-- Elige un cliente --</option>
-              ${clientes.map(c => `<option value="${c.id}">${c.nombre} (Debe: $${c.saldo_deuda})</option>`).join('')}
+              ${clientes.map(c => {
+        const saldo = Number(c.saldo_deuda);
+        const label = saldo >= 0 ? 'Debe' : 'Favor';
+        return `<option value="${c.id}">${c.nombre} (${label}: $${Math.abs(saldo).toFixed(2)})</option>`;
+      }).join('')}
             </select>
           </div>
         </div>
@@ -428,6 +518,24 @@ const renderVentas = async (container, action) => {
         document.getElementById('btnCredit').style.border = '2px solid var(--primary)';
         document.getElementById('btnCash').style.border = 'none';
         document.getElementById('clientSelect').style.display = 'block';
+        document.getElementById('cSearch').focus();
+      };
+
+      // logic for client search
+      document.getElementById('cSearch').oninput = (e) => {
+        const term = e.target.value.toLowerCase();
+        const select = document.getElementById('selClientId');
+        const currentValue = select.value;
+
+        const filtered = clientes.filter(c => c.nombre.toLowerCase().includes(term));
+        select.innerHTML = `
+          <option value="">-- Elige un cliente --</option>
+          ${filtered.map(c => {
+        const saldo = Number(c.saldo_deuda);
+        const label = saldo >= 0 ? 'Debe' : 'Favor';
+        return `<option value="${c.id}" ${c.id == currentValue ? 'selected' : ''}>${c.nombre} (${label}: $${Math.abs(saldo).toFixed(2)})</option>`;
+      }).join('')}
+        `;
       };
 
       document.getElementById('btnFinish').onclick = async () => {
@@ -441,26 +549,64 @@ const renderVentas = async (container, action) => {
         btn.innerHTML = '<div class="loading-spinner"></div>';
 
         try {
-          const sale = await addData('ventas', { total, cliente_id: selectedClientId });
+          if (editingSaleId) {
+            // Revertir Venta Anterior
+            const [oldVenta, oldDetalles, pList] = await Promise.all([
+              fetchData('ventas').then(vv => vv.find(x => x.id === editingSaleId)),
+              fetchData('detalles_venta'),
+              fetchData('productos')
+            ]);
+            
+            const oldItems = oldDetalles.filter(d => d.venta_id === editingSaleId);
+            
+            // Devolver stock anterior
+            for (const item of oldItems) {
+               const p = pList.find(x => x.id === item.producto_id);
+               if (p) await updateData('productos', p.id, { stock: Number(p.stock) + Number(item.cantidad) });
+            }
+            // Devolver deuda anterior
+            if (oldVenta.cliente_id) {
+               const c = clientes.find(x => x.id == oldVenta.cliente_id);
+               if (c) await updateData('clientes', c.id, { saldo_deuda: Number(c.saldo_deuda) - Number(oldVenta.total) });
+            }
+            // Eliminar detalles anteriores
+            for (const item of oldItems) await deleteData('detalles_venta', item.id);
+            
+            // Actualizar Venta
+            await updateData('ventas', editingSaleId, { total, cliente_id: selectedClientId });
+            var saleId = editingSaleId;
+            editingSaleId = null; // Clear edit mode
+          } else {
+            const sale = await addData('ventas', { total, cliente_id: selectedClientId });
+            var saleId = sale.id;
+          }
+
+          // Aplicar Nueva Venta
+          const updatedProds = await fetchData('productos');
           for (const item of currentSale) {
             await addData('detalles_venta', {
-              venta_id: sale.id,
+              venta_id: saleId,
               producto_id: item.id,
               cantidad: item.quantity,
               precio_unitario: item.precio_venta
             });
-            await updateData('productos', item.id, { stock: Number(item.stock) - item.quantity });
+            const pActual = updatedProds.find(x => x.id === item.id);
+            await updateData('productos', item.id, { stock: Number(pActual.stock) - item.quantity });
           }
+
           if (selectedClientId) {
             const c = clientes.find(x => x.id == selectedClientId);
-            await updateData('clientes', selectedClientId, { saldo_deuda: Number(c.saldo_deuda) + total });
+            const currentC = await fetchData('clientes').then(cc => cc.find(x => x.id == selectedClientId));
+            await updateData('clientes', selectedClientId, { saldo_deuda: Number(currentC.saldo_deuda) + total });
           }
-          toast("Venta realizada con éxito");
+
+          toast(editingSaleId ? "Venta actualizada correctamente" : "Venta realizada con éxito");
           closeModal();
-          navigate('ventas'); // Go back to sales list
+          navigate('ventas');
         } catch (e) { toast("Error: " + e.message, "error"); btn.disabled = false; btn.innerText = 'FINALIZAR'; }
       };
     };
+
   }
 };
 
