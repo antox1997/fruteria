@@ -385,9 +385,9 @@ const renderVentas = async (container, action) => {
     showLoading(container);
     const [productos, clientes] = await Promise.all([fetchData('productos'), fetchData('clientes')]);
     
-    // Only clear if not editing
-    if (!editingSaleId) {
-      currentSale = [];
+    // currentSale persistency handled after success/cancel
+    if (editingSaleId && currentSale.length === 0) {
+      // should have been populated in Edit logic, but safe-guard
     }
 
     container.innerHTML = `
@@ -411,16 +411,112 @@ const renderVentas = async (container, action) => {
         `).join('')}
       </div>
 
-      <div id="vCart" style="display:none; position:fixed; bottom: 85px; left: 1rem; right: 1rem; background: var(--bg-card); padding: 1rem; border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); border: 2px solid var(--primary); z-index: 500;" class="animate-fade-in">
-          <div style="display:flex; justify-content:space-between; align-items:center;">
-            <div>
-              <div id="vItems" style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">0 kg / unid</div>
-              <div style="font-size: 1.6rem; font-weight: 900; color: var(--primary);">$<span id="vTotal">0.00</span></div>
-            </div>
-            <button class="btn btn-primary" style="padding: 1rem 2rem;" onclick="window.vCheckout()">CONTINUAR ➔</button>
-          </div>
-      </div>
+      <button id="vCartBtn" class="floating-cart-btn" onclick="window.vShowCart()">
+        <span class="cart-icon">🛒</span>
+        <span id="vBadge" class="cart-badge">0</span>
+      </button>
     `;
+
+
+
+    window.vCancelSale = () => {
+      if (!confirm("¿Estás seguro de cancelar la venta actual?")) return;
+      currentSale = [];
+      editingSaleId = null;
+      closeModal();
+      navigate('dashboard');
+    };
+
+    window.vShowCart = () => {
+      modalOverlay.classList.add('active');
+      const content = document.getElementById('modal-content');
+      const total = currentSale.reduce((a, b) => a + (Number(b.precio_venta) * b.quantity), 0);
+
+      content.innerHTML = `
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem;">
+          <h2 style="margin:0;">Carrito de Venta</h2>
+          <button class="btn btn-ghost" onclick="window.vCancelSale()" style="color:var(--danger);">CANCELAR VENTA</button>
+        </div>
+        
+        <div style="margin-bottom: 2rem; max-height: 400px; overflow-y: auto;">
+          ${currentSale.length === 0 ? '<p style="text-align:center; color:var(--text-muted); padding:2rem;">El carrito está vacío</p>' : 
+            currentSale.map(i => `
+              <div style="display:flex; flex-direction:column; padding: 12px 0; border-bottom: 1px solid var(--border);">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                  <span style="font-weight:700;">${i.nombre}</span>
+                  <span style="font-weight:800; color:var(--primary);">$${(Number(i.precio_venta) * i.quantity).toFixed(2)}</span>
+                </div>
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                  <div style="display:flex; align-items:center; gap:10px;">
+                    <button class="btn btn-secondary" style="padding:4px 10px;" onclick="window.vUpdateQty(${i.id}, -1)">-</button>
+                    <span style="min-width:60px; text-align:center; font-weight:600;">${i.quantity} ${i.unidad}</span>
+                    <button class="btn btn-secondary" style="padding:4px 10px;" onclick="window.vUpdateQty(${i.id}, 1)">+</button>
+                  </div>
+                  <button class="btn btn-ghost" style="color:var(--danger); padding:5px;" onclick="window.vRemove(${i.id})">🗑️</button>
+                </div>
+              </div>
+            `).join('')}
+        </div>
+
+        ${currentSale.length > 0 ? `
+          <div style="display:flex; justify-content:space-between; padding: 1rem 0; font-size: 1.6rem; font-weight: 900; color: var(--primary);">
+            <span>TOTAL</span>
+            <span>$${total.toFixed(2)}</span>
+          </div>
+          <div style="display:grid; gap: 10px; margin-top: 1rem;">
+            <button class="btn btn-primary" onclick="window.vCheckout()">CONTINUAR AL PAGO ➔</button>
+            <button class="btn btn-ghost" onclick="closeModal()">SEGUIR AGREGANDO</button>
+          </div>
+        ` : `
+          <button class="btn btn-primary btn-block" onclick="closeModal()">VOLVER</button>
+        `}
+      `;
+    };
+
+    window.vUpdateQty = (pid, delta) => {
+      const item = currentSale.find(x => x.id === pid);
+      if (!item) return;
+      
+      const p = productos.find(x => x.id === pid);
+      let newQty = item.quantity + (item.unidad === 'kg' ? delta * 0.1 : delta);
+      
+      if (newQty <= 0) return window.vRemove(pid);
+      if (newQty > Number(p.stock)) return toast("No hay suficiente stock", "error");
+      
+      item.quantity = Number(newQty.toFixed(2));
+      window.vSyncUI();
+      window.vShowCart(); // Refresh modal
+    };
+
+    window.vRemove = (pid) => {
+      currentSale = currentSale.filter(x => x.id !== pid);
+      window.vSyncUI();
+      window.vShowCart(); // Refresh modal
+    };
+
+    window.vSyncUI = () => {
+      const btn = document.getElementById('vCartBtn');
+      const badge = document.getElementById('vBadge');
+      
+      btn.style.display = 'flex'; // Always show button in create mode
+      badge.innerText = currentSale.length;
+      badge.style.display = currentSale.length > 0 ? 'flex' : 'none'; // Only show badge if > 0
+
+      // Update product item badges in grid
+      document.querySelectorAll('.product-count').forEach(b => {
+        const pid = parseInt(b.id.split('-')[1]);
+        const item = currentSale.find(x => x.id === pid);
+        if (item) {
+          b.innerText = item.unidad === 'kg' ? item.quantity.toFixed(1) : item.quantity;
+          b.classList.add('visible');
+        } else {
+          b.innerText = '0';
+          b.classList.remove('visible');
+        }
+      });
+    };
+
+    window.vSyncUI(); // Initial sync on load after definitions
 
     window.vCancelEdit = () => {
       editingSaleId = null;
@@ -438,26 +534,24 @@ const renderVentas = async (container, action) => {
     // Logic globally attached for onclick
     window.vAdd = (pid) => {
       const p = productos.find(x => x.id === pid);
-      const qty = prompt(`¿Cuánto vas a vender de ${p.nombre}? (${p.unidad})`, p.unidad === 'kg' ? '1.0' : '1');
+      const existing = currentSale.find(x => x.id === pid);
+      
+      // If already in cart, just increment or prompt? 
+      // User said "go adding", usually click = add 1 or prompt.
+      // Let's keep prompt for kg, and maybe just add 1 for units?
+      // Or always prompt to be safe. Let's keep the prompt but improve it.
+
+      const defaultQty = existing ? existing.quantity : (p.unidad === 'kg' ? 1.0 : 1);
+      const qty = prompt(`¿Cuánto vas a vender de ${p.nombre}? (${p.unidad})`, defaultQty);
       const nQty = parseFloat(qty);
       if (!nQty || nQty <= 0) return;
       if (nQty > Number(p.stock)) return toast("No hay suficiente stock", "error");
 
-      const existing = currentSale.find(x => x.id === pid);
       if (existing) existing.quantity = nQty;
       else currentSale.push({ ...p, quantity: nQty });
 
-      // Update UI
-      const badge = document.getElementById(`badge-${pid}`);
-      badge.innerText = p.unidad === 'kg' ? nQty.toFixed(1) : nQty;
-      badge.classList.add('visible');
-
-      const cart = document.getElementById('vCart');
-      cart.style.display = 'block';
-
-      const total = currentSale.reduce((a, b) => a + (Number(b.precio_venta) * b.quantity), 0);
-      document.getElementById('vTotal').innerText = total.toFixed(2);
-      document.getElementById('vItems').innerText = `${currentSale.length} productos / ${currentSale.reduce((a, b) => a + b.quantity, 0).toFixed(1)} ${p.unidad}`;
+      window.vSyncUI();
+      toast(`${p.nombre} agregado`);
     };
 
     window.vCheckout = () => {
@@ -503,7 +597,7 @@ const renderVentas = async (container, action) => {
 
         <div style="display:grid; gap: 10px; margin-top: 2rem;">
           <button class="btn btn-primary" id="btnFinish">FINALIZAR VENTA</button>
-          <button class="btn btn-ghost" onclick="closeModal()">VOLVER ATRÁS</button>
+          <button class="btn btn-ghost" onclick="window.vShowCart()">VOLVER AL CARRITO</button>
         </div>
       `;
 
@@ -601,6 +695,8 @@ const renderVentas = async (container, action) => {
           }
 
           toast(editingSaleId ? "Venta actualizada correctamente" : "Venta realizada con éxito");
+          currentSale = []; // Clear cart
+          editingSaleId = null; 
           closeModal();
           navigate('ventas');
         } catch (e) { toast("Error: " + e.message, "error"); btn.disabled = false; btn.innerText = 'FINALIZAR'; }

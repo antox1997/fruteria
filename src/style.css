@@ -606,3 +606,54 @@ input:focus {
   color: var(--text-muted);
   font-size: 0.9rem;
 }
+
+/* Floating Cart Button */
+.floating-cart-btn {
+  position: fixed;
+  bottom: 100px;
+  right: 1.5rem;
+  width: 65px;
+  height: 65px;
+  background: var(--primary);
+  color: white;
+  border: none;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 16px rgba(16, 185, 129, 0.4);
+  cursor: pointer;
+  z-index: 1000;
+  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.floating-cart-btn:hover {
+  transform: scale(1.1) rotate(-5deg);
+  background: var(--primary-dark);
+}
+
+.floating-cart-btn:active {
+  transform: scale(0.95);
+}
+
+.cart-icon {
+  font-size: 1.8rem;
+}
+
+.cart-badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  background: var(--danger);
+  color: white;
+  font-size: 0.75rem;
+  font-weight: 800;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 5px;
+  border-radius: 99px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid white;
+}
