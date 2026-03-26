@@ -76,29 +76,64 @@ const renderBreadcrumbs = (module, action, itemName = '') => {
 const renderLogin = () => {
   if (nav) nav.style.display = 'none';
   app.innerHTML = `
-    <div class="login-card">
-      <div style="font-size: 4rem;">🍎</div>
-      <h1>Frutería SaaS</h1>
-      <p>Tu negocio bajo control.</p>
-      <form id="authForm">
-        <input type="email" id="authEmail" placeholder="Correo" required>
-        <input type="password" id="authPassword" placeholder="Contraseña" required>
-        <button type="submit" id="mainAuthBtn" class="btn btn-primary btn-block">ENTRAR</button>
-      </form>
-      <p id="authError" class="error-box" style="display:none;"></p>
+    <div class="login-page animate-fade-in">
+      <div class="login-card">
+        <div class="login-header">
+           <span class="login-logo">🍎</span>
+           <h1>Frutería SaaS</h1>
+           <p>Tu negocio bajo control y en la nube.</p>
+        </div>
+        
+        <form id="authForm" novalidate>
+          <div class="input-icon-group">
+            <label>Correo Electrónico</label>
+            <input type="email" id="authEmail" placeholder="ejemplo@correo.com" required autocomplete="email">
+          </div>
+          
+          <div class="input-icon-group">
+            <label>Contraseña</label>
+            <input type="password" id="authPassword" placeholder="••••••••" required autocomplete="current-password">
+          </div>
+          
+          <button type="submit" id="mainAuthBtn" class="btn btn-login">
+            ENTRAR AL SISTEMA
+          </button>
+        </form>
+        
+        <div id="authError" class="error-box-login" style="display:none;"></div>
+      </div>
     </div>`;
 
   document.getElementById('authForm').onsubmit = async (e) => {
     e.preventDefault();
+    const btn = document.getElementById('mainAuthBtn');
+    const errBox = document.getElementById('authError');
+    
+    // UI Loading State
+    btn.disabled = true;
+    btn.innerHTML = '<div class="loading-spinner"></div>';
+    errBox.style.display = 'none';
+
     const email = document.getElementById('authEmail').value;
     const password = document.getElementById('authPassword').value;
+
     try {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
+      // Navigate is handled by onAuthStateChange in main script
     } catch (err) {
-      const errBox = document.getElementById('authError');
-      errBox.innerText = "❌ " + err.message;
-      errBox.style.display = 'block';
+      errBox.innerHTML = `⚠️ <span>${err.message}</span>`;
+      errBox.style.display = 'flex';
+      btn.disabled = false;
+      btn.innerText = 'ENTRAR AL SISTEMA';
+      
+      // Visual feedback on failure
+      document.querySelector('.login-card').animate([
+        { transform: 'translateX(-5px)' },
+        { transform: 'translateX(5px)' },
+        { transform: 'translateX(-5px)' },
+        { transform: 'translateX(0)' }
+      ], { duration: 300 });
     }
   };
 };
