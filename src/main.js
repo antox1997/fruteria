@@ -77,10 +77,20 @@ const renderLogin = () => {
   if (nav) nav.style.display = 'none';
   app.innerHTML = `
     <div class="login-page animate-fade-in">
+      <!-- Decorative background to not look empty -->
+      <div class="login-bg-decoration">
+        <span class="floating-fruit" style="top: 10%; left: 10%; animation-delay: 0s;">🍎</span>
+        <span class="floating-fruit" style="top: 20%; right: 15%; animation-delay: 2s;">🥑</span>
+        <span class="floating-fruit" style="top: 70%; left: 15%; animation-delay: 4s;">🍍</span>
+        <span class="floating-fruit" style="top: 80%; right: 10%; animation-delay: 1s;">🍌</span>
+        <span class="floating-fruit" style="top: 45%; right: 5%; animation-delay: 3s;">🍎</span>
+        <span class="floating-fruit" style="top: 55%; left: 5%; animation-delay: 5s;">🍇</span>
+      </div>
+
       <div class="login-card">
         <div class="login-header">
            <span class="login-logo">🍎</span>
-           <h1>Frutería SaaS</h1>
+           <h1 style="margin-bottom: 0.5rem;">Frutería SaaS</h1>
            <p>Tu negocio bajo control y en la nube.</p>
         </div>
         
