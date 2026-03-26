@@ -134,8 +134,6 @@ export const renderVentas = async (container, action) => {
       if(badge) {
         badge.innerText = currentSale.length;
         badge.style.display = currentSale.length > 0 ? 'flex' : 'none';
-        
-        // Pulse animation if adding new
         badge.animate([{ transform: 'scale(1.2)' }, { transform: 'scale(1)' }], { duration: 200 });
       }
       document.querySelectorAll('.product-count').forEach(b => {
@@ -148,45 +146,59 @@ export const renderVentas = async (container, action) => {
 
     window.vAdd = (pid) => {
       const p = productos.find(x => x.id === pid);
+      if (!p) return;
       const existing = currentSale.find(x => x.id === pid);
       
-      // Instead of prompt, we just add 1 or update quantity if already there
-      // To recover the selector, we could show a mini-modal, but let's try +/- buttons in the card
-      // Actually, let's keep it simple: clicking adds 1. If user wants a specific number, they do it in the cart.
-      // This is often faster for users.
+      modalOverlay.classList.add('active');
+      const content = document.getElementById('modal-content');
+      content.innerHTML = `
+        <h2 style="margin-bottom:1rem;">🛒 Agregar ${p.nombre}</h2>
+        <p style="color:var(--text-muted); margin-bottom:1.5rem;">Stock disponible: <b>${p.stock} ${p.unidad}</b></p>
+        
+        <div class="form-group">
+          <label>¿Qué cantidad deseas llevar?</label>
+          <input type="number" id="vQtyInput" value="${existing ? existing.quantity : 1}" step="0.01" min="0.01" max="${p.stock}" autofocus style="font-size:1.5rem; text-align:center; padding:1rem; border-radius:1rem;">
+        </div>
+        
+        <div style="display:grid; gap:10px; margin-top:2rem;">
+          <button class="btn btn-primary" id="btnConfirmAdd" style="padding:1.2rem; font-size:1.1rem;">AGREGAR AL CARRITO ✅</button>
+          <button class="btn btn-ghost" onclick="closeModal()">CANCELAR</button>
+        </div>
+      `;
       
-      if (existing) {
-        if (existing.quantity + 1 > Number(p.stock)) return toast("Stock máximo alcanzado", "error");
-        existing.quantity += 1;
-      } else {
-        currentSale.push({ ...p, quantity: 1 });
-      }
-      window.vSyncUI();
-      toast(`+1 ${p.nombre}`);
+      document.getElementById('btnConfirmAdd').onclick = () => {
+        const nQty = parseFloat(document.getElementById('vQtyInput').value);
+        if (isNaN(nQty) || nQty <= 0) return toast("Cantidad inválida", "error");
+        if (nQty > Number(p.stock)) return toast("Stock insuficiente", "error");
+        
+        if (existing) existing.quantity = nQty;
+        else currentSale.push({ ...p, quantity: nQty });
+        
+        window.vSyncUI();
+        closeModal();
+        toast(`${p.nombre} cargado`);
+      };
     };
 
-    window.vUpdateQty = (pid, delta) => {
+    window.vEditQty = (pid) => {
       const item = currentSale.find(x => x.id === pid);
-      const p = productos.find(x => x.id === pid);
       if (!item) return;
-
-      const newQty = item.quantity + delta;
-      if (newQty <= 0) {
-        currentSale = currentSale.filter(x => x.id !== pid);
-      } else if (newQty > Number(p.stock)) {
-        return toast("Stock insuficiente", "error");
-      } else {
-        item.quantity = newQty;
-      }
-      window.vSyncUI();
-      window.vShowCart(); // Re-render cart modal
+      window.vAdd(pid); // Re-use the add modal logic for editing
     };
 
     window.vRemoveItem = (pid) => {
       currentSale = currentSale.filter(x => x.id !== pid);
       window.vSyncUI();
-      if (currentSale.length === 0) closeModal();
-      else window.vShowCart();
+      window.vShowCart();
+    };
+
+    window.vEmptyCart = () => {
+      if(confirm('¿Seguro quieres ANULAR la venta y vaciar el carrito?')) {
+        currentSale = [];
+        window.vSyncUI();
+        closeModal();
+        toast("Venta anulada");
+      }
     };
 
     window.vShowCart = () => {
@@ -198,41 +210,44 @@ export const renderVentas = async (container, action) => {
       
       content.innerHTML = `
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem;">
-          <h2 style="margin:0;">Tu Carrito</h2>
+          <h2 style="margin:0;">🛒 Tu Carrito</h2>
           <button class="btn btn-ghost" onclick="closeModal()">✕</button>
         </div>
 
-        <div style="margin-bottom: 2rem; max-height: 400px; overflow-y: auto; padding-right: 5px;">
+        <div style="margin-bottom: 2rem; max-height: 400px; overflow-y: auto;">
           ${currentSale.map(i => `
-            <div style="display:flex; justify-content:space-between; align-items:center; padding: 12px 0; border-bottom: 1px solid var(--border);">
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:15px; background:var(--bg-app); border-radius:1rem; margin-bottom:10px;">
               <div style="flex:1;">
-                <div style="font-weight:700; font-size:1rem;">${i.nombre}</div>
-                <div style="font-size:0.8rem; color:var(--text-muted);">$${Number(i.precio_venta).toFixed(2)} / ${i.unidad}</div>
+                 <div style="font-weight:800; font-size:1.1rem; color:var(--text-main);">${i.nombre}</div>
+                 <div style="font-size:0.85rem; color:var(--text-muted); font-weight:600;">
+                   ${i.quantity} ${i.unidad} x $${Number(i.precio_venta).toFixed(2)}
+                 </div>
               </div>
               
-              <div style="display:flex; align-items:center; gap:10px;">
-                <div style="display:flex; align-items:center; background:var(--bg-app); border-radius:30px; padding:2px;">
-                  <button class="btn btn-ghost" style="padding:5px 10px; border-radius:50%; min-width:32px;" onclick="window.vUpdateQty(${i.id}, -1)">-</button>
-                  <span style="font-weight:800; min-width:30px; text-align:center; font-size:1.1rem;">${i.quantity}</span>
-                  <button class="btn btn-ghost" style="padding:5px 10px; border-radius:50%; min-width:32px;" onclick="window.vUpdateQty(${i.id}, 1)">+</button>
-                </div>
-                
-                <button class="btn btn-ghost" style="color:var(--danger); font-size:1.2rem;" onclick="window.vRemoveItem(${i.id})">🗑️</button>
+              <div style="font-weight:900; color:var(--primary-dark); font-size:1.2rem; margin:0 15px;">
+                $${(i.precio_venta * i.quantity).toFixed(2)}
+              </div>
+              
+              <div style="display:flex; gap:8px;">
+                <button class="btn btn-secondary" style="padding:8px; border-radius:10px;" onclick="window.vEditQty(${i.id})" title="Editar cantidad">✏️</button>
+                <button class="btn btn-secondary" style="padding:8px; border-radius:10px; color:var(--danger);" onclick="window.vRemoveItem(${i.id})" title="Borrar">🗑️</button>
               </div>
             </div>
           `).join('')}
         </div>
         
-        <div style="background:var(--primary-light); padding:1.5rem; border-radius:var(--radius-lg); margin-bottom:1.5rem;">
-          <div style="display:flex; justify-content:space-between; align-items:center;">
-            <span style="font-weight:700; color:var(--primary-dark);">TOTAL A PAGAR</span>
-            <span style="font-size:1.8rem; font-weight:900; color:var(--primary-dark);">$${total.toFixed(2)}</span>
-          </div>
+        <div style="background:var(--primary-light); padding:1.5rem; border-radius:1.5rem; margin-bottom:1.5rem; display:flex; justify-content:space-between; align-items:center;">
+          <span style="font-weight:800; color:var(--primary-dark);">TOTAL</span>
+          <span style="font-size:2.2rem; font-weight:900; color:var(--primary-dark);">$${total.toFixed(2)}</span>
         </div>
 
         <div style="display:grid; gap:10px;">
-          <button class="btn btn-primary btn-block" style="padding:1.2rem; font-size:1.1rem;" onclick="window.vCheckout()">CONTINUAR AL PAGO ➜</button>
-          <button class="btn btn-secondary btn-block" onclick="closeModal()">SEGUIR COMPRANDO</button>
+          <button class="btn btn-primary btn-block" style="padding:1.3rem; font-size:1.2rem; border-radius:1rem; box-shadow:0 8px 16px rgba(16,185,129,0.3);" onclick="window.vCheckout()">PAGAR VENTA 💸</button>
+          
+          <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+            <button class="btn btn-danger" style="padding:1rem; border-radius:1rem;" onclick="window.vEmptyCart()">🚫 ANULAR</button>
+            <button class="btn btn-secondary" style="padding:1rem; border-radius:1rem;" onclick="closeModal()">＋ AGREGAR MÁS</button>
+          </div>
         </div>
       `;
     };
@@ -243,38 +258,38 @@ export const renderVentas = async (container, action) => {
       
       content.innerHTML = `
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem;">
-          <h2 style="margin:0;">Finalizar Venta</h2>
-          <button class="btn btn-ghost" onclick="window.vShowCart()">← Volver</button>
+          <h2 style="margin:0;">Finalizar Cobro</h2>
+          <button class="btn btn-ghost" onclick="window.vShowCart()">← Volver al Carrito</button>
         </div>
 
-        <div class="card" style="margin-bottom:1.5rem; background:var(--bg-app);">
-           <div style="font-size:0.9rem; color:var(--text-muted);">Monto total</div>
-           <div style="font-size:2rem; font-weight:900; color:var(--primary);">$${total.toFixed(2)}</div>
+        <div class="card" style="margin-bottom:2rem; background:linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); padding:2rem; border-radius:2rem; text-align:center;">
+           <div style="font-size:0.9rem; color:var(--text-muted); font-weight:800; text-transform:uppercase;">Monto a cobrar</div>
+           <div style="font-size:3rem; font-weight:900; color:var(--primary);">$${total.toFixed(2)}</div>
         </div>
 
-        <div class="form-group">
-          <label>Seleccionar Método de Pago</label>
-          <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-top:10px;">
-            <button class="btn btn-secondary method-btn active" id="btnCash" style="flex-direction:column; padding:15px; border:2px solid var(--primary);">
-               <span style="font-size:1.5rem;">💵</span>
-               <span style="font-size:0.7rem; margin-top:5px;">EFECTIVO</span>
+        <div class="form-group" style="margin-bottom:2rem;">
+          <label style="font-weight:800; color:var(--text-main);">MÉTODO DE PAGO</label>
+          <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin-top:10px;">
+            <button class="btn btn-secondary method-btn" id="btnCash" style="flex-direction:column; padding:20px; border-radius:1.5rem; transition:all 0.3s; border:3px solid transparent;">
+               <span style="font-size:2rem;">💵</span>
+               <span style="font-size:0.75rem; font-weight:900;">EFECTIVO</span>
             </button>
-            <button class="btn btn-secondary method-btn" id="btnMobile" style="flex-direction:column; padding:15px; border:2px solid transparent;">
-               <span style="font-size:1.5rem;">📱</span>
-               <span style="font-size:0.7rem; margin-top:5px;">P. MÓVIL</span>
+            <button class="btn btn-secondary method-btn" id="btnMobile" style="flex-direction:column; padding:20px; border-radius:1.5rem; transition:all 0.3s; border:3px solid transparent;">
+               <span style="font-size:2rem;">📱</span>
+               <span style="font-size:0.75rem; font-weight:900;">MÓVIL</span>
             </button>
-            <button class="btn btn-secondary method-btn" id="btnFiado" style="flex-direction:column; padding:15px; border:2px solid transparent;">
-               <span style="font-size:1.5rem;">🛡️</span>
-               <span style="font-size:0.7rem; margin-top:5px;">FIADO</span>
+            <button class="btn btn-secondary method-btn" id="btnFiado" style="flex-direction:column; padding:20px; border-radius:1.5rem; transition:all 0.3s; border:3px solid transparent;">
+               <span style="font-size:2rem;">🛡️</span>
+               <span style="font-size:0.75rem; font-weight:900;">FIADO</span>
             </button>
           </div>
         </div>
 
-        <div id="clientSelectContainer" style="display:none;" class="animate-fade-in">
-           <div class="form-group">
-             <label>Seleccionar Cliente</label>
-             <input type="text" id="cSearch" placeholder="Buscar cliente..." style="margin-bottom:10px;">
-             <select id="selClientId" style="padding:12px;">
+        <div id="clientSelectContainer" style="display:none; padding:1.5rem; background:#f0f9ff; border-radius:1.5rem; border:1px solid #bae6fd; margin-bottom:2rem;" class="animate-fade-in">
+           <div class="form-group" style="margin:0;">
+             <label style="color:#0369a1; font-weight:800;">BUSCAR CLIENTE</label>
+             <input type="text" id="cSearch" placeholder="Nombre..." style="margin:10px 0; border-radius:1rem;">
+             <select id="selClientId" style="padding:15px; border-radius:1rem; font-weight:600;">
                <option value="">-- Seleccionar --</option>
                ${clientes.map(c => `<option value="${c.id}">${c.nombre} (Saldo: $${Number(c.saldo_deuda).toFixed(2)})</option>`).join('')}
              </select>
@@ -282,7 +297,7 @@ export const renderVentas = async (container, action) => {
         </div>
 
         <div style="display:grid; gap:10px; margin-top:2rem;">
-          <button class="btn btn-primary btn-block" style="padding:1.2rem; font-size:1.1rem;" id="btnFinish">EFECTUAR VENTA ✅</button>
+          <button class="btn btn-primary btn-block" style="padding:1.4rem; font-size:1.2rem; border-radius:1.2rem;" id="btnFinish">CONFIRMAR PAGO ✅</button>
           <button class="btn btn-ghost btn-block" onclick="closeModal()">CANCELAR</button>
         </div>
       `;
@@ -293,10 +308,18 @@ export const renderVentas = async (container, action) => {
 
       const updateMethods = (method) => {
         selectedMethod = method;
-        Object.values(btns).forEach(id => document.getElementById(id).style.borderColor = 'transparent');
-        document.getElementById(btns[method]).style.borderColor = 'var(--primary)';
+        Object.values(btns).forEach(id => {
+          const el = document.getElementById(id);
+          el.style.borderColor = 'transparent';
+          el.style.background = 'white';
+        });
+        const activeEl = document.getElementById(btns[method]);
+        activeEl.style.borderColor = 'var(--primary)';
+        activeEl.style.background = '#ecfdf5';
         cBox.style.display = method === 'fiado' ? 'block' : 'none';
       };
+
+      updateMethods('efectivo');
 
       document.getElementById('btnCash').onclick = () => updateMethods('efectivo');
       document.getElementById('btnMobile').onclick = () => updateMethods('pago_movil');
@@ -314,18 +337,18 @@ export const renderVentas = async (container, action) => {
         const btn = document.getElementById('btnFinish');
         const cid = selectedMethod === 'fiado' ? document.getElementById('selClientId').value : null;
 
-        if (selectedMethod === 'fiado' && !cid) return toast("Selecciona un cliente", "error");
+        if (selectedMethod === 'fiado' && !cid) return toast("Debes seleccionar un cliente", "error");
 
         btn.disabled = true;
         btn.innerHTML = '<div class="loading-spinner"></div>';
 
         try {
           await registerSale(total, cid, currentSale, selectedMethod, editingSaleId);
-          toast("¡Venta registrada con éxito!");
+          toast("Venta procesada con éxito");
           currentSale = []; editingSaleId = null;
           closeModal();
           navigate('ventas');
-        } catch (e) { toast(e.message, "error"); btn.disabled = false; btn.innerText = 'EFECTUAR VENTA ✅'; }
+        } catch (e) { toast(e.message, "error"); btn.disabled = false; btn.innerText = 'CONFIRMAR PAGO ✅'; }
       };
     };
 
