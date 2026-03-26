@@ -280,7 +280,7 @@ export const renderVentas = async (container, action) => {
             </button>
             <button class="btn btn-secondary method-btn" id="btnFiado" style="flex-direction:column; padding:20px; border-radius:1.5rem; transition:all 0.3s; border:3px solid transparent;">
                <span style="font-size:2rem;">🛡️</span>
-               <span style="font-size:0.75rem; font-weight:900;">FIADO</span>
+               <span style="font-size:0.75rem; font-weight:900;">A CRÉDITO</span>
             </button>
           </div>
         </div>
