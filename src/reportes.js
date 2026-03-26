@@ -20,7 +20,7 @@ const formatCurrency = (n) => `$${Number(n || 0).toFixed(2)}`;
 const quickRange = (type) => {
   const now = new Date();
   if (type === '24h') return [new Date(now.getTime() - 24 * 60 * 60 * 1000), now];
-  if (type === '7d')  return [new Date(now.getTime() - 7  * 24 * 60 * 60 * 1000), now];
+  if (type === '7d') return [new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000), now];
   if (type === '30d') return [new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000), now];
   return [null, null];
 };
@@ -45,14 +45,20 @@ const buildVentasData = (items, clientes) => {
   const total = items.reduce((a, b) => a + Number(b.total), 0);
   const rows = items.map(v => {
     const cliente = clientes.find(c => c.id === v.cliente_id);
-    return [formatDate(v.fecha), cliente ? cliente.nombre : 'Contado', formatCurrency(v.total)];
+    const metodo = {
+      'efectivo': '💵 Ef.',
+      'pago_movil': '📱 PM',
+      'fiado': '🛡️ Crédito'
+    }[v.metodo_pago] || '💵 Ef.';
+
+    return [formatDate(v.fecha), cliente ? cliente.nombre : 'Contado', metodo, formatCurrency(v.total)];
   });
   return {
     title: 'Reporte de Ventas',
-    columns: ['Fecha', 'Cliente', 'Total'],
+    columns: ['Fecha', 'Cliente', 'Método', 'Total'],
     rows,
     summary: `${items.length} venta(s) | Total: ${formatCurrency(total)}`,
-    totalsRow: ['', 'TOTAL', formatCurrency(total)],
+    totalsRow: ['', '', 'TOTAL', formatCurrency(total)],
   };
 };
 
@@ -163,9 +169,9 @@ const exportToPDF = (data, modulo, dateStart, dateEnd) => {
   doc.text(`Generado: ${new Date().toLocaleString('es-VE')}`, 14, 39);
 
   // Sanitizar encabezados, filas y totales antes de pasarlos a autoTable
-  const cleanColumns  = data.columns.map(sanitizePDF);
-  const cleanRows     = data.rows.map(sanitizeRow);
-  const cleanTotals   = data.totalsRow ? sanitizeRow(data.totalsRow) : null;
+  const cleanColumns = data.columns.map(sanitizePDF);
+  const cleanRows = data.rows.map(sanitizeRow);
+  const cleanTotals = data.totalsRow ? sanitizeRow(data.totalsRow) : null;
 
   // Tabla principal
   autoTable(doc, {
@@ -388,16 +394,16 @@ export const openReportModal = () => {
   `;
 
   // ── Referencias directas al DOM ──
-  const resultsEl     = content.querySelector('#report-results');
-  const dateSection   = content.querySelector('#report-date-section');
+  const resultsEl = content.querySelector('#report-results');
+  const dateSection = content.querySelector('#report-date-section');
   const customDatesEl = content.querySelector('#report-custom-dates');
   const dateFromInput = content.querySelector('#report-date-from');
-  const dateToInput   = content.querySelector('#report-date-to');
-  const generateBtn   = content.querySelector('#btn-generate-report');
-  const closeBtn      = content.querySelector('#btn-close-report');
-  const exportBar     = content.querySelector('#report-export-bar');
-  const btnPDF        = content.querySelector('#btn-export-pdf');
-  const btnExcel      = content.querySelector('#btn-export-excel');
+  const dateToInput = content.querySelector('#report-date-to');
+  const generateBtn = content.querySelector('#btn-generate-report');
+  const closeBtn = content.querySelector('#btn-close-report');
+  const exportBar = content.querySelector('#report-export-bar');
+  const btnPDF = content.querySelector('#btn-export-pdf');
+  const btnExcel = content.querySelector('#btn-export-excel');
 
   overlay.classList.add('active');
 
@@ -438,13 +444,13 @@ export const openReportModal = () => {
   generateBtn.addEventListener('click', async () => {
     if (isCustom) {
       const fromVal = dateFromInput?.value;
-      const toVal   = dateToInput?.value;
+      const toVal = dateToInput?.value;
       if (!fromVal || !toVal) {
         resultsEl.innerHTML = '<p style="color:var(--danger);padding:0.5rem 0;">⚠️ Selecciona un rango de fechas válido.</p>';
         return;
       }
       dateStart = new Date(fromVal + 'T00:00:00');
-      dateEnd   = new Date(toVal   + 'T23:59:59');
+      dateEnd = new Date(toVal + 'T23:59:59');
     }
 
     // Deshabilitar botón mientras carga

@@ -11,6 +11,7 @@ let currentAction = 'list'; // list, create, edit
 let currentSale = []; // { product, quantity }
 let isProcessing = false;
 let editingSaleId = null; // ID of the sale being edited
+let editingMetodoPago = null; // Original payment method when editing
 
 const app = document.getElementById('app');
 const nav = document.querySelector('nav');
@@ -253,6 +254,7 @@ const renderVentas = async (container, action) => {
             <tr>
               <th style="padding:1rem;">Fecha</th>
               <th>Cliente</th>
+              <th>Método</th>
               <th>Total</th>
               <th style="text-align:right; padding-right:1rem;">Acciones</th>
             </tr>
@@ -260,10 +262,17 @@ const renderVentas = async (container, action) => {
           <tbody>
             ${ventas.reverse().map(v => {
       const cliente = clientes.find(c => c.id === v.cliente_id);
+      const metodoIcon = {
+        'efectivo': '💵',
+        'pago_movil': '📱',
+        'fiado': '🛡️'
+      }[v.metodo_pago] || '💵';
+
       return `
                 <tr style="border-bottom: 1px solid var(--border);">
                   <td style="padding:1rem; font-size: 0.85rem;">${new Date(v.fecha).toLocaleDateString()} ${new Date(v.fecha).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
                   <td style="font-size: 0.85rem;">${cliente ? cliente.nombre : '<span style="color:var(--text-muted)">Contado</span>'}</td>
+                  <td style="font-size: 1.1rem; text-align: center;">${metodoIcon}</td>
                   <td style="font-weight:700; color:var(--primary);">$${Number(v.total).toFixed(2)}</td>
                   <td style="text-align:right; padding-right:1rem; display:flex; justify-content: flex-end; gap:5px;">
                     <button class="btn btn-ghost" onclick="window.vShowDetail(${v.id})" title="Ver detalle">👁️</button>
@@ -280,7 +289,7 @@ const renderVentas = async (container, action) => {
 
     window.vDeleteVenta = async (id) => {
       if (!confirm(`¿Estás seguro de eliminar la venta #${id}? Se restará de la deuda del cliente y se devolverá el stock.`)) return;
-      
+
       try {
         const [detalles, venta, productos, todosClientes] = await Promise.all([
           fetchData('detalles_venta'),
@@ -339,6 +348,7 @@ const renderVentas = async (container, action) => {
         });
 
         editingSaleId = id;
+        editingMetodoPago = venta.metodo_pago;
         navigate('ventas', 'create');
       } catch (e) {
         toast("Error al cargar venta: " + e.message, "error");
@@ -360,6 +370,7 @@ const renderVentas = async (container, action) => {
         <div style="margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border);">
           <div style="font-size: 0.9rem; color: var(--text-muted);">Fecha: ${new Date(venta.fecha).toLocaleString()}</div>
           <div style="font-size: 0.9rem; color: var(--text-muted);">Cliente: ${cliente ? cliente.nombre : 'Contado'}</div>
+          <div style="font-size: 0.9rem; color: var(--text-muted);">Método: ${venta.metodo_pago === 'pago_movil' ? '📱 Pago Móvil' : venta.metodo_pago === 'fiado' ? '🛡️ Crédito' : '💵 Efectivo'}</div>
         </div>
         <div style="margin-bottom: 2rem; max-height: 300px; overflow-y: auto;">
           ${items.map(i => {
@@ -384,7 +395,7 @@ const renderVentas = async (container, action) => {
     // action === 'create'
     showLoading(container);
     const [productos, clientes] = await Promise.all([fetchData('productos'), fetchData('clientes')]);
-    
+
     // Only clear if not editing
     if (!editingSaleId) {
       currentSale = [];
@@ -424,6 +435,7 @@ const renderVentas = async (container, action) => {
 
     window.vCancelEdit = () => {
       editingSaleId = null;
+      editingMetodoPago = null;
       currentSale = [];
       navigate('ventas');
     };
@@ -480,9 +492,10 @@ const renderVentas = async (container, action) => {
 
         <div class="form-group">
           <label>Método de Pago</label>
-          <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-            <button class="btn btn-secondary" id="btnCash" style="border: 2px solid var(--primary);">💵 EFECTIVO</button>
-            <button class="btn btn-secondary" id="btnCredit">🛡️ FIADO / DEUDA</button>
+          <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
+            <button class="btn btn-secondary" id="btnCash" style="border: 2px solid var(--primary); font-size: 0.8rem;">💵 EFECTIVO</button>
+            <button class="btn btn-secondary" id="btnMobile" style="font-size: 0.8rem;">📱 PAGO MÓVIL</button>
+            <button class="btn btn-secondary" id="btnCredit" style="font-size: 0.8rem;">🛡️ CRÉDITO</button>
           </div>
         </div>
 
@@ -508,16 +521,30 @@ const renderVentas = async (container, action) => {
       `;
 
       let selectedClientId = null;
+      let metodoPago = editingMetodoPago || 'efectivo';
+
+      const updateUI = () => {
+        document.getElementById('btnCash').style.border = metodoPago === 'efectivo' ? '2px solid var(--primary)' : 'none';
+        document.getElementById('btnMobile').style.border = metodoPago === 'pago_movil' ? '2px solid var(--primary)' : 'none';
+        document.getElementById('btnCredit').style.border = metodoPago === 'fiado' ? '2px solid var(--primary)' : 'none';
+        document.getElementById('clientSelect').style.display = metodoPago === 'fiado' ? 'block' : 'none';
+      };
+
+      updateUI();
+
       document.getElementById('btnCash').onclick = () => {
         selectedClientId = null;
-        document.getElementById('btnCash').style.border = '2px solid var(--primary)';
-        document.getElementById('btnCredit').style.border = 'none';
-        document.getElementById('clientSelect').style.display = 'none';
+        metodoPago = 'efectivo';
+        updateUI();
+      };
+      document.getElementById('btnMobile').onclick = () => {
+        selectedClientId = null;
+        metodoPago = 'pago_movil';
+        updateUI();
       };
       document.getElementById('btnCredit').onclick = () => {
-        document.getElementById('btnCredit').style.border = '2px solid var(--primary)';
-        document.getElementById('btnCash').style.border = 'none';
-        document.getElementById('clientSelect').style.display = 'block';
+        metodoPago = 'fiado';
+        updateUI();
         document.getElementById('cSearch').focus();
       };
 
@@ -531,17 +558,17 @@ const renderVentas = async (container, action) => {
         select.innerHTML = `
           <option value="">-- Elige un cliente --</option>
           ${filtered.map(c => {
-        const saldo = Number(c.saldo_deuda);
-        const label = saldo >= 0 ? 'Debe' : 'Favor';
-        return `<option value="${c.id}" ${c.id == currentValue ? 'selected' : ''}>${c.nombre} (${label}: $${Math.abs(saldo).toFixed(2)})</option>`;
-      }).join('')}
+          const saldo = Number(c.saldo_deuda);
+          const label = saldo >= 0 ? 'Debe' : 'Favor';
+          return `<option value="${c.id}" ${c.id == currentValue ? 'selected' : ''}>${c.nombre} (${label}: $${Math.abs(saldo).toFixed(2)})</option>`;
+        }).join('')}
         `;
       };
 
       document.getElementById('btnFinish').onclick = async () => {
         if (document.getElementById('clientSelect').style.display === 'block') {
           selectedClientId = document.getElementById('selClientId').value;
-          if (!selectedClientId) return toast("Selecciona un cliente para fiar", "error");
+          if (!selectedClientId) return toast("Selecciona un cliente para dar crédito", "error");
         }
 
         const btn = document.getElementById('btnFinish');
@@ -556,28 +583,29 @@ const renderVentas = async (container, action) => {
               fetchData('detalles_venta'),
               fetchData('productos')
             ]);
-            
+
             const oldItems = oldDetalles.filter(d => d.venta_id === editingSaleId);
-            
+
             // Devolver stock anterior
             for (const item of oldItems) {
-               const p = pList.find(x => x.id === item.producto_id);
-               if (p) await updateData('productos', p.id, { stock: Number(p.stock) + Number(item.cantidad) });
+              const p = pList.find(x => x.id === item.producto_id);
+              if (p) await updateData('productos', p.id, { stock: Number(p.stock) + Number(item.cantidad) });
             }
             // Devolver deuda anterior
             if (oldVenta.cliente_id) {
-               const c = clientes.find(x => x.id == oldVenta.cliente_id);
-               if (c) await updateData('clientes', c.id, { saldo_deuda: Number(c.saldo_deuda) - Number(oldVenta.total) });
+              const c = clientes.find(x => x.id == oldVenta.cliente_id);
+              if (c) await updateData('clientes', c.id, { saldo_deuda: Number(c.saldo_deuda) - Number(oldVenta.total) });
             }
             // Eliminar detalles anteriores
             for (const item of oldItems) await deleteData('detalles_venta', item.id);
-            
+
             // Actualizar Venta
-            await updateData('ventas', editingSaleId, { total, cliente_id: selectedClientId });
+            await updateData('ventas', editingSaleId, { total, cliente_id: selectedClientId, metodo_pago: metodoPago });
             var saleId = editingSaleId;
             editingSaleId = null; // Clear edit mode
+            editingMetodoPago = null;
           } else {
-            const sale = await addData('ventas', { total, cliente_id: selectedClientId });
+            const sale = await addData('ventas', { total, cliente_id: selectedClientId, metodo_pago: metodoPago });
             var saleId = sale.id;
           }
 
@@ -909,17 +937,13 @@ const renderCompras = async (container, action, params) => {
               <label>Nombre del Nuevo Producto</label>
               <input type="text" id="pName" placeholder="Ej: Mango Tommy">
             </div>
-            <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+            <div style="display:grid; grid-template-columns: 1fr; gap: 15px;">
               <div class="form-group">
                 <label>Unidad</label>
                 <select id="pUnit">
                   <option value="kg">Kilo (kg)</option>
                   <option value="unid">Unidad (unid)</option>
                 </select>
-              </div>
-              <div class="form-group">
-                <label>Precio Venta Sugerido</label>
-                <input type="number" id="pPrice" step="0.01" placeholder="0.00">
               </div>
             </div>
             <div class="form-group">
@@ -928,13 +952,23 @@ const renderCompras = async (container, action, params) => {
             </div>
           </div>
 
-          <div class="form-group">
-            <label id="qtyLabel">Cantidad comprada</label>
-            <input type="number" id="bQty" step="0.01" required placeholder="0.00">
+          <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+            <div class="form-group">
+              <label id="qtyLabel">Cantidad comprada</label>
+              <input type="number" id="bQty" step="0.01" required placeholder="0.00">
+            </div>
+            <div class="form-group">
+              <label id="costLabel">Precio Compra x Unid/Kg</label>
+              <input type="number" id="bCost" step="0.01" required placeholder="0.00">
+            </div>
           </div>
+
           <div class="form-group">
-            <label id="costLabel">Precio de Compra x unidad/kg</label>
-            <input type="number" id="bCost" step="0.01" required placeholder="0.00">
+            <label id="priceLabel">Precio Venta</label>
+            <input type="number" id="bPrice" step="0.01" required placeholder="0.00">
+            <div id="marginAlert" style="display:none; color: var(--danger); font-size: 0.85rem; margin-top: 8px; font-weight: 700; background: #fee2e2; padding: 8px; border-radius: 6px; border-left: 4px solid var(--danger);">
+              ⚠️ ALERTA: El precio de venta es menor al precio de compra. El margen es negativo.
+            </div>
           </div>
 
           <div style="display:grid; gap:10px; margin-top:2rem;">
@@ -950,19 +984,55 @@ const renderCompras = async (container, action, params) => {
     const newFields = document.getElementById('newProductFields');
     const bSearch = document.getElementById('bSearch');
     const bProd = document.getElementById('bProd');
+    const bPrice = document.getElementById('bPrice');
+    const bCost = document.getElementById('bCost');
+    const marginAlert = document.getElementById('marginAlert');
+    const priceLabel = document.getElementById('priceLabel');
+
+    const checkMargin = () => {
+      const cost = parseFloat(bCost.value) || 0;
+      const price = parseFloat(bPrice.value) || 0;
+      if (price > 0 && price < cost) {
+        marginAlert.style.display = 'block';
+      } else {
+        marginAlert.style.display = 'none';
+      }
+    };
+
+    bCost.oninput = checkMargin;
+    bPrice.oninput = checkMargin;
 
     isNewCheck.onchange = (e) => {
       const isNew = e.target.checked;
       existingFields.style.display = isNew ? 'none' : 'block';
       newFields.style.display = isNew ? 'block' : 'none';
-      if (!isNew) {
-        document.getElementById('pName').required = false;
-        document.getElementById('pPrice').required = false;
-        document.getElementById('bProd').required = true;
-      } else {
+      
+      if (isNew) {
+        priceLabel.innerText = "Precio Venta Sugerido";
         document.getElementById('pName').required = true;
-        document.getElementById('pPrice').required = true;
         document.getElementById('bProd').required = false;
+        bPrice.value = "";
+      } else {
+        priceLabel.innerText = "Nuevo Precio de Venta";
+        document.getElementById('pName').required = false;
+        document.getElementById('bProd').required = true;
+        // Trigger update if a product was already selected
+        if(bProd.value) {
+           const p = productos.find(x => x.id == bProd.value);
+           if(p) bPrice.value = p.precio_venta;
+        }
+      }
+      checkMargin();
+    };
+
+    bProd.onchange = (e) => {
+      const pid = e.target.value;
+      if (pid) {
+        const p = productos.find(x => x.id == pid);
+        if (p) {
+          bPrice.value = p.precio_venta;
+          checkMargin();
+        }
       }
     };
 
@@ -984,16 +1054,15 @@ const renderCompras = async (container, action, params) => {
       const isNew = isNewCheck.checked;
       const qty = parseFloat(document.getElementById('bQty').value);
       const cost = parseFloat(document.getElementById('bCost').value);
+      const price = parseFloat(bPrice.value);
 
       try {
         let pid;
         if (isNew) {
           const name = document.getElementById('pName').value;
           const unit = document.getElementById('pUnit').value;
-          const price = parseFloat(document.getElementById('pPrice').value);
           const min = parseInt(document.getElementById('pMin').value) || 5;
 
-          // 1. Create product
           const product = await addData('productos', {
             nombre: name,
             unidad: unit,
@@ -1007,14 +1076,13 @@ const renderCompras = async (container, action, params) => {
           pid = parseInt(bProd.value);
           if (!pid) throw new Error("Selecciona un producto");
           const p = productos.find(x => x.id == pid);
-          // Update existing product stock/cost
           await updateData('productos', pid, {
             stock: Number(p.stock) + qty,
-            precio_compra: cost
+            precio_compra: cost,
+            precio_venta: price
           });
         }
 
-        // 2. Register purchase
         await addData('compras', {
           producto_id: pid,
           cantidad: qty,
@@ -1023,7 +1091,7 @@ const renderCompras = async (container, action, params) => {
           fecha: new Date().toISOString()
         });
 
-        toast(isNew ? "Producto agregado y stock registrado" : "Stock actualizado con éxito");
+        toast(isNew ? "Producto agregado y stock registrado" : "Stock y precio actualizados con éxito");
         navigate('compras');
       } catch (ex) {
         toast(ex.message, "error");
