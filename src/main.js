@@ -395,17 +395,10 @@ const renderVentas = async (container, action) => {
     // action === 'create'
     showLoading(container);
     const [productos, clientes] = await Promise.all([fetchData('productos'), fetchData('clientes')]);
-<<<<<<< HEAD
-
-    // Only clear if not editing
-    if (!editingSaleId) {
-      currentSale = [];
-=======
     
     // currentSale persistency handled after success/cancel
     if (editingSaleId && currentSale.length === 0) {
       // should have been populated in Edit logic, but safe-guard
->>>>>>> 33d18632d202d37acdf32705f14bdbf414d75af0
     }
 
     container.innerHTML = `
